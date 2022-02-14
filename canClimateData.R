@@ -164,7 +164,7 @@ Init <- function(sim) {
   stopifnot(getOption("reproducible.useNewDigestAlgorithm") == 2)
 
   ## get pre-made DEM to use with climate data
-  dem <- Cache(prepInputs, url = demUrl, destinationPath = dPath,
+  dem <- Cache(prepInputs, url = demURL, destinationPath = dPath,
                fun = "raster::raster",
                useCache = P(sim)$.useCache,
                userTags = c(paste0("DEM_", P(sim)$studyAreaName), cacheTags))
