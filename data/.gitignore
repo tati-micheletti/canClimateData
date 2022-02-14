@@ -4,4 +4,5 @@
 ## don't ignore
 !.gitignore
 !CHECKSUMS.txt
+!climateDataURLs.csv
 
