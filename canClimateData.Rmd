@@ -50,7 +50,7 @@ knitr::kable(df_params)
 
 # Events
 
-This moduel consists of a single `init` event that performs all the data preparation.
+This module consists of a single `init` event that performs all the data preparation.
 
 # Data dependencies
 

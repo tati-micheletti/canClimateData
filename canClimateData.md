@@ -584,7 +584,7 @@ Provide a summary of user-visible parameters.
 
 # Events
 
-This moduel consists of a single `init` event that performs all the data preparation.
+This module consists of a single `init` event that performs all the data preparation.
 
 # Data dependencies
 
