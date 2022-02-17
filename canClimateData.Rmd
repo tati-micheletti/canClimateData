@@ -1,7 +1,7 @@
 ---
 title: "canClimateData"
-author: ""
-date: "21 September 2020"
+author: "Alex Chubaty"
+date: "`r format(Sys.time(), '%d %B %Y')`"
 output:
   html_document:
     df_print: paged
@@ -12,73 +12,45 @@ editor_options:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, eval = FALSE, warning = FALSE, results = "hold")
+
+if (!require("Require", quietly = TRUE)) {
+  install.packages("Require")
+  library(Require)
+}
+Require("SpaDES.core", require = FALSE, upgrade = FALSE)
+Require(c("knitr", "kableExtra", "magrittr"))
 ```
 
 # Overview
 
-Provide an overview of what the module does / how to use the module.
+Prepare Canadian historic and projected climate data for use with LandR.CS and fireSense.
 
-Module documentation should be written so that others can use your module.
-This is a template for module documentation, and should be changed to reflect your module.
+Currently supports study areas in AB, BC, SK, MB, ON, QR, NT, and YT, for the following climate scenarios:
 
-## R Markdown
-
-R Markdown syntax allows R code, outputs, and figures to be rendered in the documentation.
-
-For help writing in R Markdown, see https://rmarkdown.rstudio.com/.
-
-# Usage
-
-```{r load-libraries, eval = TRUE}
-library(SpaDES.core)
-```
-
-```{r module_usage}
-setPaths(modulePath = file.path('../'),
-         inputPath = "data")
-paths <- getPaths() # shows where the 4 relevant paths are
-
-times <- list(start = 0, end = 10)
-
-parameters <- list(
-  WBI_data_Prep_studyArea = list(
-  studyAreaName = 'RIA'
-  #.progress = list(type = "text", interval = 1), # for a progress bar
-  ## If there are further modules, each can have its own set of parameters:
-  #module1 = list(param1 = value1, param2 = value2),
-  #module2 = list(param1 = value1, param2 = value2)
-))
-modules <- list("canClimateData")
-objects <- list()
-inputs <- list()
-outputs <- list()
-
-mySim <- simInit(times = times, params = parameters, modules = modules,
-                 objects = objects, paths = paths)
-
-mySimOut <- spades(mySim)
+```{r climateStudyAreas, eval = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
+#csv <- file.path("modules", "canClimateData", "data", "climateDataURLs.csv")
+csv <- file.path("data", "climateDataURLs.csv")
+df_climate <- read.csv(csv, stringsAsFactors = FALSE)
+df_climate <- subset(df_climate, select = c("studyArea", "GCM", "SSP")) |> na.omit() |> unique()
+df_climate <- df_climate[order(df_climate$studyArea, df_climate$GCM, df_climate$SSP), ]
+g <- which(as.integer(as.factor(df_climate$studyArea)) %% 2 == 0) ## alternate by group
+knitr::kable(df_climate, row.names = FALSE) %>% 
+  kable_styling(full_width = FALSE) %>% 
+  row_spec(g, background = "#f0f0f0")
 ```
 
 # Parameters
 
 Provide a summary of user-visible parameters.
 
-```{r moduleParams, echo = FALSE, eval = TRUE}
-df_params <- moduleParams("canClimateData", "..")
+```{r moduleParams, eval = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
+df_params <- SpaDES.core::moduleParams("canClimateData", "..")
 knitr::kable(df_params)
 ```
 
 # Events
 
-Describe what happens for each event type.
-
-## Plotting
-
-Write what is plotted.
-
-## Saving
-
-Write what is saved.
+This moduel consists of a single `init` event that performs all the data preparation.
 
 # Data dependencies
 
@@ -87,8 +59,8 @@ Write what is saved.
 How to obtain input data, and a description of the data required by the module.
 If `sourceURL` is specified, `downloadData("canClimateData", "..")` may be sufficient.
 
-```{r moduleInputs, echo = FALSE, eval = TRUE}
-df_inputs <- moduleInputs("canClimateData", "..")
+```{r moduleInputs, eval = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
+df_inputs <- SpaDES.core::moduleInputs("canClimateData", "..")
 knitr::kable(df_inputs)
 ```
 
@@ -96,11 +68,11 @@ knitr::kable(df_inputs)
 
 Description of the module outputs.
 
-```{r moduleOutputs, echo = FALSE}
-df_outputs <- moduleOutputs("canClimateData", "..")
+```{r moduleOutputs, eval = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
+df_outputs <- SpaDES.core::moduleOutputs("canClimateData", "..")
 knitr::kable(df_outputs)
 ```
 
 # Links to other modules
 
-Describe any anticipated linkages to other modules.
+Originally developed to provide inputs to `gmcsDataPrep` (for use with climate-sensitive LandR Biomass projections; see `Biomass_core`) and the `fireSense` suite of modules.
