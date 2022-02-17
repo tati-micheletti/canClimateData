@@ -25,19 +25,7 @@ Require(c("knitr", "kableExtra", "magrittr"))
 
 Prepare Canadian historic and projected climate data for use with LandR.CS and fireSense.
 
-Currently supports study areas in AB, BC, SK, MB, ON, QR, NT, and YT, for the following climate scenarios:
-
-```{r climateStudyAreas, eval = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
-#csv <- file.path("modules", "canClimateData", "data", "climateDataURLs.csv")
-csv <- file.path("data", "climateDataURLs.csv")
-df_climate <- read.csv(csv, stringsAsFactors = FALSE)
-df_climate <- subset(df_climate, select = c("studyArea", "GCM", "SSP")) |> na.omit() |> unique()
-df_climate <- df_climate[order(df_climate$studyArea, df_climate$GCM, df_climate$SSP), ]
-g <- which(as.integer(as.factor(df_climate$studyArea)) %% 2 == 0) ## alternate by group
-knitr::kable(df_climate, row.names = FALSE) %>% 
-  kable_styling(full_width = FALSE) %>% 
-  row_spec(g, background = "#f0f0f0")
-```
+Currently supports study areas in AB, BC, SK, MB, ON, QC, NT, and YT, for some CMIP6 climate scenarios (see below).
 
 # Parameters
 
@@ -56,12 +44,50 @@ This module consists of a single `init` event that performs all the data prepara
 
 ## Input data
 
-How to obtain input data, and a description of the data required by the module.
-If `sourceURL` is specified, `downloadData("canClimateData", "..")` may be sufficient.
-
 ```{r moduleInputs, eval = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
 df_inputs <- SpaDES.core::moduleInputs("canClimateData", "..")
 knitr::kable(df_inputs)
+```
+
+### Historic and projected climate data
+
+### Prerequisites
+
+1. DEM from GEOTOPO15 product
+2. Climate data using [ClimateNA](https://climatena.ca) with projected climate scenario(s).
+
+### Available data sets
+
+```{r climateStudyAreas, eval = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
+#csv <- file.path("modules", "canClimateData", "data", "climateDataURLs.csv")
+csv <- file.path("data", "climateDataURLs.csv")
+df_climate <- read.csv(csv, stringsAsFactors = FALSE)
+df_climate <- subset(df_climate, select = c("studyArea", "GCM", "SSP")) |> na.omit() |> unique()
+df_climate <- df_climate[order(df_climate$studyArea, df_climate$GCM, df_climate$SSP), ]
+g <- which(as.integer(as.factor(df_climate$studyArea)) %% 2 == 0) ## alternate by group
+knitr::kable(df_climate, row.names = FALSE) %>% 
+  kable_styling(full_width = FALSE) %>% 
+  row_spec(g, background = "#f0f0f0")
+```
+
+### Additional data sets
+
+Other study areas and/or climate scenarios can be added by making suitable `.zip` archives available via Google Drive and updating the `climateDataURLs.csv` file accordingly.
+
+**NOTE:** the following naming conventions should be used for the `.zip` archives:
+
+```{r naming, eval = TRUE, echo = FALSE, message = FALSE, warning = FALSE}
+df_znames <- data.frame(
+  "Description" = c("Historic normals: 1951-1980Y and 1981_2010Y",
+                    "Historic monthly: 1991-2020",
+                    "Projected annual: 2011-2100",
+                    "Projected monthly: 2011-2100"),
+  "Archive Filename" = c("studyAreaNameLong_normals.zip",
+                         "studyAreaNameLong.zip",
+                         "climateGCM_climateSSP_studyAreaNameLong_annual,zip",
+                         "climateGCM_climateSSP_studyAreaNameLong,zip")
+)
+knitr::kable(df_znames)
 ```
 
 ## Output data

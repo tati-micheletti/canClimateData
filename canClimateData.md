@@ -16,7 +16,180 @@ editor_options:
 
 Prepare Canadian historic and projected climate data for use with LandR.CS and fireSense.
 
-Currently supports study areas in AB, BC, SK, MB, ON, QR, NT, and YT, for the following climate scenarios:
+Currently supports study areas in AB, BC, SK, MB, ON, QC, NT, and YT, for some CMIP6 climate scenarios (see below).
+
+# Parameters
+
+Provide a summary of user-visible parameters.
+
+<table>
+ <thead>
+  <tr>
+   <th style="text-align:left;"> paramName </th>
+   <th style="text-align:left;"> paramClass </th>
+   <th style="text-align:left;"> default </th>
+   <th style="text-align:left;"> min </th>
+   <th style="text-align:left;"> max </th>
+   <th style="text-align:left;"> paramDesc </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr>
+   <td style="text-align:left;"> .plotInitialTime </td>
+   <td style="text-align:left;"> numeric </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Describes the simulation time at which the first plot event should occur. </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> .plotInterval </td>
+   <td style="text-align:left;"> numeric </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Describes the simulation time interval between plot events. </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> .saveInitialTime </td>
+   <td style="text-align:left;"> numeric </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Describes the simulation time at which the first save event should occur. </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> .saveInterval </td>
+   <td style="text-align:left;"> numeric </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> This describes the simulation time interval between save events. </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> .useCache </td>
+   <td style="text-align:left;"> logical </td>
+   <td style="text-align:left;"> FALSE </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> bufferDist </td>
+   <td style="text-align:left;"> numeric </td>
+   <td style="text-align:left;"> 20000 </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Distance (m) to buffer studyArea and rasterToMatch when creating 'Large' versions. </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> climateGCM </td>
+   <td style="text-align:left;"> character </td>
+   <td style="text-align:left;"> CNRM-ESM2-1 </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Global Circulation Model to use for climate projections: currently '13GCMs_ensemble', 'CanESM5', 'CNRM-ESM2-1', or 'CCSM4'. </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> climateSSP </td>
+   <td style="text-align:left;"> numeric </td>
+   <td style="text-align:left;"> 370 </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> SSP emissions scenario for `climateGCM`: one of 245, 370, or 585.[If using 'climateGCM = CCSM4', climateSSP must be one of 45 or 85.] </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> historicalFireYears </td>
+   <td style="text-align:left;"> numeric </td>
+   <td style="text-align:left;"> 1991, 19.... </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> range of years captured by the historical climate data </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> projectedFireYears </td>
+   <td style="text-align:left;"> numeric </td>
+   <td style="text-align:left;"> 2011, 20.... </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> range of years captured by the projected climate data </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> studyAreaName </td>
+   <td style="text-align:left;"> character </td>
+   <td style="text-align:left;"> RIA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> One of 'AB', 'BC', 'MB', 'NT', 'ON', 'QC', 'SK', 'YT', or 'RIA'. </td>
+  </tr>
+</tbody>
+</table>
+
+# Events
+
+This module consists of a single `init` event that performs all the data preparation.
+
+# Data dependencies
+
+## Input data
+
+<table>
+ <thead>
+  <tr>
+   <th style="text-align:left;"> objectName </th>
+   <th style="text-align:left;"> objectClass </th>
+   <th style="text-align:left;"> desc </th>
+   <th style="text-align:left;"> sourceURL </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr>
+   <td style="text-align:left;"> rasterToMatch </td>
+   <td style="text-align:left;"> RasterLayer </td>
+   <td style="text-align:left;"> template raster </td>
+   <td style="text-align:left;"> NA </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> rasterToMatchLarge </td>
+   <td style="text-align:left;"> RasterLayer </td>
+   <td style="text-align:left;"> template raster for larger area </td>
+   <td style="text-align:left;"> NA </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> rasterToMatchReporting </td>
+   <td style="text-align:left;"> RasterLayer </td>
+   <td style="text-align:left;"> template raster for reporting area </td>
+   <td style="text-align:left;"> NA </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> studyArea </td>
+   <td style="text-align:left;"> SpatialPolygonsDataFrame </td>
+   <td style="text-align:left;"> study area used for simulation (buffered to mitigate edge effects) </td>
+   <td style="text-align:left;"> NA </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> studyAreaLarge </td>
+   <td style="text-align:left;"> SpatialPolygonsDataFrame </td>
+   <td style="text-align:left;"> study area used for module parameterization (buffered) </td>
+   <td style="text-align:left;"> NA </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> studyAreaReporting </td>
+   <td style="text-align:left;"> SpatialPolygonsDataFrame </td>
+   <td style="text-align:left;"> study area used for reporting/post-processing </td>
+   <td style="text-align:left;"> NA </td>
+  </tr>
+</tbody>
+</table>
+
+### Historic and projected climate data
+
+### Prerequisites
+
+1. DEM from GEOTOPO15 product
+2. Climate data using [ClimateNA](https://climatena.ca) with projected climate scenario(s).
+
+### Available data sets
 
 <table class="table" style="width: auto !important; margin-left: auto; margin-right: auto;">
  <thead>
@@ -475,169 +648,35 @@ Currently supports study areas in AB, BC, SK, MB, ON, QR, NT, and YT, for the fo
 </tbody>
 </table>
 
-# Parameters
+### Additional data sets
 
-Provide a summary of user-visible parameters.
+Other study areas and/or climate scenarios can be added by making suitable `.zip` archives available via Google Drive and updating the `climateDataURLs.csv` file accordingly.
 
-<table>
- <thead>
-  <tr>
-   <th style="text-align:left;"> paramName </th>
-   <th style="text-align:left;"> paramClass </th>
-   <th style="text-align:left;"> default </th>
-   <th style="text-align:left;"> min </th>
-   <th style="text-align:left;"> max </th>
-   <th style="text-align:left;"> paramDesc </th>
-  </tr>
- </thead>
-<tbody>
-  <tr>
-   <td style="text-align:left;"> .plotInitialTime </td>
-   <td style="text-align:left;"> numeric </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> Describes the simulation time at which the first plot event should occur. </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> .plotInterval </td>
-   <td style="text-align:left;"> numeric </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> Describes the simulation time interval between plot events. </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> .saveInitialTime </td>
-   <td style="text-align:left;"> numeric </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> Describes the simulation time at which the first save event should occur. </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> .saveInterval </td>
-   <td style="text-align:left;"> numeric </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> This describes the simulation time interval between save events. </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> .useCache </td>
-   <td style="text-align:left;"> logical </td>
-   <td style="text-align:left;"> FALSE </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> Should this entire module be run with caching activated? This is generally intended for data-type modules, where stochasticity and time are not relevant </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> bufferDist </td>
-   <td style="text-align:left;"> numeric </td>
-   <td style="text-align:left;"> 20000 </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> Distance (m) to buffer studyArea and rasterToMatch when creating 'Large' versions. </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> climateGCM </td>
-   <td style="text-align:left;"> character </td>
-   <td style="text-align:left;"> CNRM-ESM2-1 </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> Global Circulation Model to use for climate projections: currently '13GCMs_ensemble', 'CanESM5', 'CNRM-ESM2-1', or 'CCSM4'. </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> climateSSP </td>
-   <td style="text-align:left;"> numeric </td>
-   <td style="text-align:left;"> 370 </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> SSP emissions scenario for `climateGCM`: one of 245, 370, or 585.[If using 'climateGCM = CCSM4', climateSSP must be one of 45 or 85.] </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> historicalFireYears </td>
-   <td style="text-align:left;"> numeric </td>
-   <td style="text-align:left;"> 1991, 19.... </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> range of years captured by the historical climate data </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> projectedFireYears </td>
-   <td style="text-align:left;"> numeric </td>
-   <td style="text-align:left;"> 2011, 20.... </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> range of years captured by the projected climate data </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> studyAreaName </td>
-   <td style="text-align:left;"> character </td>
-   <td style="text-align:left;"> RIA </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> NA </td>
-   <td style="text-align:left;"> One of 'AB', 'BC', 'MB', 'NT', 'ON', 'QC', 'SK', 'YT', or 'RIA'. </td>
-  </tr>
-</tbody>
-</table>
-
-# Events
-
-This module consists of a single `init` event that performs all the data preparation.
-
-# Data dependencies
-
-## Input data
-
-How to obtain input data, and a description of the data required by the module.
-If `sourceURL` is specified, `downloadData("canClimateData", "..")` may be sufficient.
+**NOTE:** the following naming conventions should be used for the `.zip` archives:
 
 <table>
  <thead>
   <tr>
-   <th style="text-align:left;"> objectName </th>
-   <th style="text-align:left;"> objectClass </th>
-   <th style="text-align:left;"> desc </th>
-   <th style="text-align:left;"> sourceURL </th>
+   <th style="text-align:left;"> Description </th>
+   <th style="text-align:left;"> Archive.Filename </th>
   </tr>
  </thead>
 <tbody>
   <tr>
-   <td style="text-align:left;"> rasterToMatch </td>
-   <td style="text-align:left;"> RasterLayer </td>
-   <td style="text-align:left;"> template raster </td>
-   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Historic normals: 1951-1980Y and 1981_2010Y </td>
+   <td style="text-align:left;"> studyAreaNameLong_normals.zip </td>
   </tr>
   <tr>
-   <td style="text-align:left;"> rasterToMatchLarge </td>
-   <td style="text-align:left;"> RasterLayer </td>
-   <td style="text-align:left;"> template raster for larger area </td>
-   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Historic monthly: 1991-2020 </td>
+   <td style="text-align:left;"> studyAreaNameLong.zip </td>
   </tr>
   <tr>
-   <td style="text-align:left;"> rasterToMatchReporting </td>
-   <td style="text-align:left;"> RasterLayer </td>
-   <td style="text-align:left;"> template raster for reporting area </td>
-   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Projected annual: 2011-2100 </td>
+   <td style="text-align:left;"> climateGCM_climateSSP_studyAreaNameLong_annual,zip </td>
   </tr>
   <tr>
-   <td style="text-align:left;"> studyArea </td>
-   <td style="text-align:left;"> SpatialPolygonsDataFrame </td>
-   <td style="text-align:left;"> study area used for simulation (buffered to mitigate edge effects) </td>
-   <td style="text-align:left;"> NA </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> studyAreaLarge </td>
-   <td style="text-align:left;"> SpatialPolygonsDataFrame </td>
-   <td style="text-align:left;"> study area used for module parameterization (buffered) </td>
-   <td style="text-align:left;"> NA </td>
-  </tr>
-  <tr>
-   <td style="text-align:left;"> studyAreaReporting </td>
-   <td style="text-align:left;"> SpatialPolygonsDataFrame </td>
-   <td style="text-align:left;"> study area used for reporting/post-processing </td>
-   <td style="text-align:left;"> NA </td>
+   <td style="text-align:left;"> Projected monthly: 2011-2100 </td>
+   <td style="text-align:left;"> climateGCM_climateSSP_studyAreaNameLong,zip </td>
   </tr>
 </tbody>
 </table>
