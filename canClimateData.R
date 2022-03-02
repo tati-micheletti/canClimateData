@@ -1,4 +1,4 @@
-defineModule(sim, list(
+edefineModule(sim, list(
   name = "canClimateData",
   description = paste(
     "Prepares projected and historical climate data for fitting and predicting fires,",
@@ -17,7 +17,7 @@ defineModule(sim, list(
   citation = list("citation.bib"),
   documentation = deparse(list("README.md", "canClimateData.Rmd")),
   reqdPkgs = list("archive", "magrittr", "raster", "sf", "sp", "spatialEco",
-                  "PredictiveEcology/reproducible@terraInProjectInputs (>= 1.2.8.9033)",
+                  "PredictiveEcology/reproducible@development (>= 1.2.8.9033)",
                   "PredictiveEcology/fireSenseUtils@development (>= 0.0.4.9014)",
                   "PredictiveEcology/LandR@development",
                   "PredictiveEcology/climateData@development (>= 0.0.0.9005)"),
