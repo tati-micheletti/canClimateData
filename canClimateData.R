@@ -1,4 +1,4 @@
-defineModule(sim, list(
+edefineModule(sim, list(
   name = "canClimateData",
   description = paste(
     "Prepares projected and historical climate data for fitting and predicting fires,",
@@ -17,7 +17,7 @@ defineModule(sim, list(
   citation = list("citation.bib"),
   documentation = deparse(list("README.md", "canClimateData.Rmd")),
   reqdPkgs = list("archive", "magrittr", "raster", "sf", "sp", "spatialEco",
-                  "PredictiveEcology/reproducible@terraInProjectInputs (>= 1.2.8.9033)",
+                  "PredictiveEcology/reproducible@development (>= 1.2.8.9033)",
                   "PredictiveEcology/fireSenseUtils@development (>= 0.0.4.9014)",
                   "PredictiveEcology/LandR@development",
                   "PredictiveEcology/climateData@development (>= 0.0.0.9005)"),
@@ -124,8 +124,8 @@ Init <- function(sim) {
 
   ## lookup table to get climate urls  based on studyArea, GCM, and SSP
   dt <- data.table::fread(file = file.path(dataPath(sim), "climateDataURLs.csv"))
-  historicalClimateURL <- dt[studyArea == studyAreaName & type == "hist_monthly", GID]
-  projectedClimateUrl <- dt[studyArea == studyAreaName &
+  historicalClimateURL <- dt[studyArea == P(sim)$studyAreaName & type == "hist_monthly", GID]
+  projectedClimateUrl <- dt[studyArea == P(sim)$studyAreaName &
                               GCM == P(sim)$climateGCM &
                               SSP == P(sim)$climateSSP &
                               type == "proj_monthly", GID]
@@ -172,7 +172,7 @@ Init <- function(sim) {
   ## HISTORIC CLIMATE DATA
   historicalClimatePath <- checkPath(file.path(dPath, "climate", "historic"), create = TRUE)
   historicalClimateArchive <- file.path(historicalClimatePath, paste0(mod$studyAreaNameLong, ".zip"))
-  historicalMDCfile <- file.path(historicalClimatePath, paste0("MDC_historical_", studyAreaName, ".tif"))
+  historicalMDCfile <- file.path(historicalClimatePath, paste0("MDC_historical_", P(sim)$studyAreaName, ".tif"))
 
   ## need to download and extract w/o prepInputs to preserve folder structure!
   if (!file.exists(historicalClimateArchive)) {
@@ -225,7 +225,7 @@ Init <- function(sim) {
                                               P(sim)$climateSSP, ".zip"))
   projectedMDCfile <- file.path(dirname(projectedClimatePath),
                                 paste0("MDC_future_", P(sim)$climateGCM,
-                                       "_ssp", P(sim)$climateSSP, "_", studyAreaName, ".tif"))
+                                       "_ssp", P(sim)$climateSSP, "_", P(sim)$studyAreaName, ".tif"))
 
   ## need to download and extract w/o prepInputs to preserve folder structure!
   if (!file.exists(projectedClimateArchive)) {
@@ -271,7 +271,7 @@ Init <- function(sim) {
   ## 4) run makeLandRCS_projectedCMIandATA, with normal MAT as an input arg. It returns a list of raster stacks (projected ATA and CMI). Assign both to sim
   ## 5) Profit
 
-  normalsClimateUrl <- dt[studyArea == studyAreaName & type == "hist_normals", GID]
+  normalsClimateUrl <- dt[studyArea == P(sim)$studyAreaName & type == "hist_normals", GID]
   normalsClimatePath <- checkPath(file.path(historicalClimatePath, "normals"), create = TRUE)
   normalsClimateArchive <- file.path(normalsClimatePath, paste0(mod$studyAreaNameLong, "_normals.zip"))
 
@@ -289,7 +289,7 @@ Init <- function(sim) {
   )
   sim$CMInormal <- normals[["CMInormal"]]
 
-  projAnnualClimateUrl <- dt[studyArea == studyAreaName &
+  projAnnualClimateUrl <- dt[studyArea == P(sim)$studyAreaName &
                                GCM == P(sim)$climateGCM &
                                SSP == P(sim)$climateSSP &
                                type == "proj_annual", GID]
