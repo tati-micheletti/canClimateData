@@ -190,7 +190,8 @@ Init <- function(sim) {
                          years = P(sim)$historicalFireYears,
                          # quick = "inputPath",
                          .cacheExtra = c(digestFiles, digestSA_RTM, digestYears),
-                         omitArgs = c("years", "inputPath")
+                         omitArgs = c("years", "inputPath"),
+                         userTags = c("historicMDC", cacheTags)
   )
 
   historicalMDC <- Cache(postProcessTerra,
@@ -200,6 +201,7 @@ Init <- function(sim) {
                          quick = "writeTo",
                          datatype = "INT2U",
                          omitArgs = c("from", "to", "maskTo"),
+                         userTags = c("historicMDC", cacheTags),
                          .cacheExtra = c(digestFiles, digestSA_RTM, digestYears))
   historicalMDC <- raster::stack(historicalMDC) # fast
 
@@ -238,6 +240,7 @@ Init <- function(sim) {
     inputPath = file.path(projectedClimatePath, mod$studyAreaNameLong),
     years = P(sim)$projectedFireYears,
     # quick = "inputPath",
+    userTags = c("projectedMDC", cacheTags),
     .cacheExtra = c(digestFiles, digestSA_RTM, digestYears), # digestYears is studyArea & rasterToMatch
     omitArgs = c("years", "inputPath")
   )
@@ -250,6 +253,7 @@ Init <- function(sim) {
                         quick = "writeTo",
                         datatype = "INT2U",
                         omitArgs = c("from", "to", "maskTo"),
+                        userTags = c("projectedMDC", cacheTags),
                         .cacheExtra = c(digestFiles, digestSA_RTM, digestYears))
   projectedMDC <- raster::stack(projectedMDC) # fast
 
@@ -277,9 +281,12 @@ Init <- function(sim) {
     archive::archive_extract(normalsClimateArchive, normalsClimatePath)
   }
 
-  normals <- Cache(makeLandRCS_1950_2010_normals,
-                   pathToNormalRasters = file.path(normalsClimatePath, mod$studyAreaNameLong),
-                   rasterToMatch = sim$rasterToMatch)
+  normals <- Cache(
+    makeLandRCS_1950_2010_normals,
+    pathToNormalRasters = file.path(normalsClimatePath, mod$studyAreaNameLong),
+    rasterToMatch = sim$rasterToMatch,
+    userTags = c("normals", cacheTags)
+  )
   sim$CMInormal <- normals[["CMInormal"]]
 
   projAnnualClimateUrl <- dt[studyArea == studyAreaName &
@@ -302,7 +309,8 @@ Init <- function(sim) {
                       normalMAT = normals[["MATnormal"]],
                       pathToFutureRasters = file.path(projAnnualClimatePath, mod$studyAreaNameLong),
                       years = P(sim)$projectedFireYears,
-                      useCache = TRUE)
+                      useCache = TRUE,
+                      userTags = c("projectedCMIandATA", cacheTags))
   sim$ATAstack <- projCMIATA[["projectedATA"]]
   sim$CMIstack <- projCMIATA[["projectedCMI"]]
 
@@ -396,7 +404,7 @@ Init <- function(sim) {
       ## But if RIA SA = SAL, or RTM = RTML, it falls apart.
       sim$studyArea <- Cache(prepInputs, url = studyAreaUrl,
                              destinationPath = dPath,
-                             userTags = c("studyArea", cacheTags)) %>%
+                             userTags = c("studyArea", P(sim)$studyAreaName, cacheTags)) %>%
         sf::st_as_sf(.) %>%
         .[.$TSA_NUMBER %in% c("40", "08", "41", "24", "16"),] %>%
         sf::st_buffer(., 0) %>%
