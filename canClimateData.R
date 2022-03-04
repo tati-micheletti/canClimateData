@@ -1,4 +1,4 @@
-edefineModule(sim, list(
+defineModule(sim, list(
   name = "canClimateData",
   description = paste(
     "Prepares projected and historical climate data for fitting and predicting fires,",
