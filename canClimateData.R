@@ -138,24 +138,25 @@ Init <- function(sim) {
                                   AB = "Alberta",
                                   BC = "British Columbia",
                                   MB = "Manitoba",
-                                  NT = "Northwest Territories & Nunavut",
-                                  NU = "Northwest Territories & Nunavut",
-                                  ON = "Ontario",
-                                  QC = "Quebec",
-                                  SK = "Saskatchewan",
-                                  YT = "Yukon",
-                                  RIA = "RIA")
+                                    NT = "Northwest Territories & Nunavut",
+                                    NU = "Northwest Territories & Nunavut",
+                                    ON = "Ontario",
+                                    QC = "Quebec",
+                                    SK = "Saskatchewan",
+                                    YT = "Yukon",
+                                    RIA = "RIA",
+                                    stop("studyAreaName must be one of: ", paste(allowedStudyAreas, collapse = ", ")))
 
   demURL <- switch(P(sim)$studyAreaName,
                    AB = "https://drive.google.com/file/d/1g1SEU65zje6686pQXQzVVQQc44IXaznr/",
                    BC = "https://drive.google.com/file/d/1DaAYFr0z38qmbZcz452QPMP_fzwUIqLD/",
                    MB = "https://drive.google.com/file/d/1X7b2CE6QyCvik3UG9pUj6zc4b5UYZi8w/",
-                   NT = "https://drive.google.com/file/d/13n8LjQJihy9kd3SniS91EuXunowbWOBa/", ## with NU
-                   NU = "https://drive.google.com/file/d/13n8LjQJihy9kd3SniS91EuXunowbWOBa/", ## with NT
-                   ON = "https://drive.google.com/file/d/1NP2toth6-c5g7dzwLh34pqZ0rdypTauS/",
-                   QC = "https://drive.google.com/file/d/1xShpp_irB2AH1ak9Z1i4wXZJuzncpAbc/",
-                   SK = "https://drive.google.com/file/d/1CooPdqc3SlVVU7y_BaPfZD0OXt42fjBC/",
-                   YT = "https://drive.google.com/file/d/1CUMjLFGdGtwaQlErQ0Oq89ICUCcX641Q/",
+                     NT = "https://drive.google.com/file/d/13n8LjQJihy9kd3SniS91EuXunowbWOBa/", ## with NU
+                     NU = "https://drive.google.com/file/d/13n8LjQJihy9kd3SniS91EuXunowbWOBa/", ## with NT
+                     ON = "https://drive.google.com/file/d/1NP2toth6-c5g7dzwLh34pqZ0rdypTauS/",
+                     QC = "https://drive.google.com/file/d/1xShpp_irB2AH1ak9Z1i4wXZJuzncpAbc/",
+                     SK = "https://drive.google.com/file/d/1CooPdqc3SlVVU7y_BaPfZD0OXt42fjBC/",
+                     YT = "https://drive.google.com/file/d/1CUMjLFGdGtwaQlErQ0Oq89ICUCcX641Q/",
                    RIA = "https://drive.google.com/file/d/13sGg1X9DEOSkedg1m0PxcdJiuBESk072/",
                    stop("studyAreaName must be one of: ", paste(allowedStudyAreas, collapse = ", ")))
 
@@ -163,7 +164,7 @@ Init <- function(sim) {
 
   stopifnot(getOption("reproducible.useNewDigestAlgorithm") == 2)
 
-  ## get pre-made DEM to use with climate data
+    ## get pre-made DEM to use with climate data
   dem <- Cache(prepInputs, url = demURL, destinationPath = dPath,
                fun = "raster::raster",
                useCache = P(sim)$.useCache,
@@ -176,52 +177,52 @@ Init <- function(sim) {
 
   ## need to download and extract w/o prepInputs to preserve folder structure!
   if (!file.exists(historicalClimateArchive)) {
-    googledrive::drive_download(file = as_id(historicalClimateURL), path = historicalClimateArchive)
-    archive::archive_extract(historicalClimateArchive, historicalClimatePath)
-  }
+      googledrive::drive_download(file = as_id(historicalClimateURL), path = historicalClimateArchive)
+      archive::archive_extract(historicalClimateArchive, historicalClimatePath)
+    }
 
-  # all downstream stuff from this one archive file should have same Cache assessment
-  #   do it once here and pass to each subsequent through .cacheExtra
-  digestFiles <- digest::digest(file = historicalClimateArchive, algo = "xxhash64")
-  digestYears <- CacheDigest(list(P(sim)$historicalFireYears))$outputHash
-  digestSA_RTM <- CacheDigest(list(sim$studyArea, sim$rasterToMatch))$outputHash
-  historicalMDC <- Cache(makeMDC,
-                         inputPath = checkPath(file.path(historicalClimatePath, mod$studyAreaNameLong), create = TRUE),
-                         years = P(sim)$historicalFireYears,
-                         # quick = "inputPath",
-                         .cacheExtra = c(digestFiles, digestSA_RTM, digestYears),
-                         omitArgs = c("years", "inputPath"),
-                         userTags = c("historicMDC", cacheTags)
-  )
+    # all downstream stuff from this one archive file should have same Cache assessment
+    #   do it once here and pass to each subsequent through .cacheExtra
+    digestFiles <- digest::digest(file = historicalClimateArchive, algo = "xxhash64")
+    digestYears <- CacheDigest(list(P(sim)$historicalFireYears))$outputHash
+    digestSA_RTM <- CacheDigest(list(sim$studyArea, sim$rasterToMatch))$outputHash
+    historicalMDC <- Cache(makeMDC,
+                           inputPath = checkPath(file.path(historicalClimatePath, mod$studyAreaNameLong), create = TRUE),
+                           years = P(sim)$historicalFireYears,
+                           # quick = "inputPath",
+                           .cacheExtra = c(digestFiles, digestSA_RTM, digestYears),
+                           omitArgs = c("years", "inputPath"),
+                           userTags = c("historicMDC", cacheTags)
+    )
 
-  historicalMDC <- Cache(postProcessTerra,
-                         from = terra::rast(historicalMDC),
-                         to = sim$rasterToMatch,
-                         writeTo = historicalMDCfile,
-                         quick = "writeTo",
-                         datatype = "INT2U",
-                         omitArgs = c("from", "to", "maskTo"),
-                         userTags = c("historicMDC", cacheTags),
-                         .cacheExtra = c(digestFiles, digestSA_RTM, digestYears))
-  historicalMDC <- raster::stack(historicalMDC) # fast
+    historicalMDC <- Cache(postProcessTerra,
+                           from = terra::rast(historicalMDC),
+                           to = sim$rasterToMatch,
+                           writeTo = historicalMDCfile,
+                           quick = "writeTo",
+                           datatype = "INT2U",
+                           omitArgs = c("from", "to", "maskTo"),
+                           userTags = c("historicMDC", cacheTags),
+                           .cacheExtra = c(digestFiles, digestSA_RTM, digestYears))
+    historicalMDC <- raster::stack(historicalMDC) # fast
 
-  ## The names need "year" at the start, because not every year will have fires (data issue in RIA),
-  ## so fireSense matches fires + climate rasters by year.
-  ## WARNING: names(historicalMDC) <- paste0('year', P(sim)$historicalFireYears) # Bad
-  ##          |-> allows for index mismatching
-  historicalMDC <- updateStackYearNames(historicalMDC, Par$historicalFireYears)
-  #historicalMDC[] <- historicalMDC[] ## bring raster to memory
+    ## The names need "year" at the start, because not every year will have fires (data issue in RIA),
+    ## so fireSense matches fires + climate rasters by year.
+    ## WARNING: names(historicalMDC) <- paste0('year', P(sim)$historicalFireYears) # Bad
+    ##          |-> allows for index mismatching
+    historicalMDC <- updateStackYearNames(historicalMDC, Par$historicalFireYears)
+    #historicalMDC[] <- historicalMDC[] ## bring raster to memory
 
-  compareRaster(historicalMDC, sim$rasterToMatch)
+    compareRaster(historicalMDC, sim$rasterToMatch)
 
-  sim$historicalClimateRasters <- list("MDC" = historicalMDC)
+    sim$historicalClimateRasters <- list("MDC" = historicalMDC)
 
-  ## FUTURE CLIMATE DATA
-  projectedClimatePath <- checkPath(file.path(dPath, "climate", "future",
-                                              paste0(P(sim)$climateGCM, "_ssp", P(sim)$climateSSP)), create = TRUE)
-  projectedClimateArchive <- file.path(dirname(projectedClimatePath),
-                                       paste0(mod$studyAreaNameLong, "_",
-                                              P(sim)$climateGCM, "_ssp",
+    ## FUTURE CLIMATE DATA
+    projectedClimatePath <- checkPath(file.path(dPath, "climate", "future",
+                                                paste0(P(sim)$climateGCM, "_ssp", P(sim)$climateSSP)), create = TRUE)
+    projectedClimateArchive <- file.path(dirname(projectedClimatePath),
+                                         paste0(mod$studyAreaNameLong, "_",
+                                                P(sim)$climateGCM, "_ssp",
                                               P(sim)$climateSSP, ".zip"))
   projectedMDCfile <- file.path(dirname(projectedClimatePath),
                                 paste0("MDC_future_", P(sim)$climateGCM,
@@ -229,45 +230,45 @@ Init <- function(sim) {
 
   ## need to download and extract w/o prepInputs to preserve folder structure!
   if (!file.exists(projectedClimateArchive)) {
-    googledrive::drive_download(file = as_id(projectedClimateUrl), path = projectedClimateArchive)
-    archive::archive_extract(projectedClimateArchive, projectedClimatePath)
-  }
-  digestFiles <- digest::digest(file = projectedClimateArchive, algo = "xxhash64")
-  digestYears <- CacheDigest(list(P(sim)$projectedFireYears))$outputHash
+      googledrive::drive_download(file = as_id(projectedClimateUrl), path = projectedClimateArchive)
+      archive::archive_extract(projectedClimateArchive, projectedClimatePath)
+    }
+    digestFiles <- digest::digest(file = projectedClimateArchive, algo = "xxhash64")
+    digestYears <- CacheDigest(list(P(sim)$projectedFireYears))$outputHash
 
-  projectedMDC <- Cache(
-    makeMDC,
-    inputPath = file.path(projectedClimatePath, mod$studyAreaNameLong),
-    years = P(sim)$projectedFireYears,
-    # quick = "inputPath",
-    userTags = c("projectedMDC", cacheTags),
-    .cacheExtra = c(digestFiles, digestSA_RTM, digestYears), # digestYears is studyArea & rasterToMatch
-    omitArgs = c("years", "inputPath")
-  )
+    projectedMDC <- Cache(
+      makeMDC,
+      inputPath = file.path(projectedClimatePath, mod$studyAreaNameLong),
+      years = P(sim)$projectedFireYears,
+      # quick = "inputPath",
+      userTags = c("projectedMDC", cacheTags),
+      .cacheExtra = c(digestFiles, digestSA_RTM, digestYears), # digestYears is studyArea & rasterToMatch
+      omitArgs = c("years", "inputPath")
+    )
 
-  projectedMDC <- Cache(postProcessTerra,
-                        from = terra::rast(projectedMDC),
-                        to = sim$rasterToMatch,
-                        maskTo = sim$studyArea,
-                        writeTo = projectedMDCfile,
-                        quick = "writeTo",
-                        datatype = "INT2U",
-                        omitArgs = c("from", "to", "maskTo"),
-                        userTags = c("projectedMDC", cacheTags),
-                        .cacheExtra = c(digestFiles, digestSA_RTM, digestYears))
-  projectedMDC <- raster::stack(projectedMDC) # fast
+    projectedMDC <- Cache(postProcessTerra,
+                          from = terra::rast(projectedMDC),
+                          to = sim$rasterToMatch,
+                          maskTo = sim$studyArea,
+                          writeTo = projectedMDCfile,
+                          quick = "writeTo",
+                          datatype = "INT2U",
+                          omitArgs = c("from", "to", "maskTo"),
+                          userTags = c("projectedMDC", cacheTags),
+                          .cacheExtra = c(digestFiles, digestSA_RTM, digestYears))
+    projectedMDC <- raster::stack(projectedMDC) # fast
 
-  ## WARNING: names(projectedMDC) <- paste0('year', P(sim)$projectedFireYears) # Bad
-  ##          |-> allows for index mismatching
-  projectedMDC <- updateStackYearNames(projectedMDC, Par$projectedFireYears)
-  #projectedMDC[] <- projectedMDC[] ## bring raster to memory
+    ## WARNING: names(projectedMDC) <- paste0('year', P(sim)$projectedFireYears) # Bad
+    ##          |-> allows for index mismatching
+    projectedMDC <- updateStackYearNames(projectedMDC, Par$projectedFireYears)
+    #projectedMDC[] <- projectedMDC[] ## bring raster to memory
 
-  sim$projectedClimateRasters <- list("MDC" = projectedMDC)
+    sim$projectedClimateRasters <- list("MDC" = projectedMDC)
 
-  ## CLIMATE DATA FOR gmcsDataPrep:
-  ## 1) get and unzip normals and projected annual
-  ## 2) run makeLandRCS_1950_2010normals, it returns a raster stack with two layers, normal MAT, and normal CMI
-  ## 3) assign normal CMI to sim
+    ## CLIMATE DATA FOR gmcsDataPrep:
+    ## 1) get and unzip normals and projected annual
+    ## 2) run makeLandRCS_1950_2010normals, it returns a raster stack with two layers, normal MAT, and normal CMI
+    ## 3) assign normal CMI to sim
   ## 4) run makeLandRCS_projectedCMIandATA, with normal MAT as an input arg. It returns a list of raster stacks (projected ATA and CMI). Assign both to sim
   ## 5) Profit
 
@@ -275,17 +276,17 @@ Init <- function(sim) {
   normalsClimatePath <- checkPath(file.path(historicalClimatePath, "normals"), create = TRUE)
   normalsClimateArchive <- file.path(normalsClimatePath, paste0(mod$studyAreaNameLong, "_normals.zip"))
 
-  if (!file.exists(normalsClimateArchive)) {
-    ## need to download and extract w/o prepInputs to preserve folder structure!
-    googledrive::drive_download(file = as_id(normalsClimateUrl), path = normalsClimateArchive)
-    archive::archive_extract(normalsClimateArchive, normalsClimatePath)
-  }
+    if (!file.exists(normalsClimateArchive)) {
+      ## need to download and extract w/o prepInputs to preserve folder structure!
+      googledrive::drive_download(file = as_id(normalsClimateUrl), path = normalsClimateArchive)
+      archive::archive_extract(normalsClimateArchive, normalsClimatePath)
+    }
 
-  normals <- Cache(
-    makeLandRCS_1950_2010_normals,
-    pathToNormalRasters = file.path(normalsClimatePath, mod$studyAreaNameLong),
-    rasterToMatch = sim$rasterToMatch,
-    userTags = c("normals", cacheTags)
+    normals <- Cache(
+      makeLandRCS_1950_2010_normals,
+      pathToNormalRasters = file.path(normalsClimatePath, mod$studyAreaNameLong),
+      rasterToMatch = sim$rasterToMatch,
+      userTags = c("normals", cacheTags)
   )
   sim$CMInormal <- normals[["CMInormal"]]
 
@@ -293,23 +294,23 @@ Init <- function(sim) {
                                GCM == P(sim)$climateGCM &
                                SSP == P(sim)$climateSSP &
                                type == "proj_annual", GID]
-  projAnnualClimatePath <- checkPath(file.path(projectedClimatePath, "annual"), create = TRUE)
-  projAnnualClimateArchive <- file.path(dirname(projAnnualClimatePath),
-                                        paste0(mod$studyAreaNameLong, "_",
-                                               P(sim)$climateGCM, "_ssp",
-                                               P(sim)$climateSSP, "_annual.zip"))
+    projAnnualClimatePath <- checkPath(file.path(projectedClimatePath, "annual"), create = TRUE)
+    projAnnualClimateArchive <- file.path(dirname(projAnnualClimatePath),
+                                          paste0(mod$studyAreaNameLong, "_",
+                                                 P(sim)$climateGCM, "_ssp",
+                                                 P(sim)$climateSSP, "_annual.zip"))
 
-  if (!file.exists(projAnnualClimateArchive)) {
-    ## need to download and extract w/o prepInputs to preserve folder structure!
-    googledrive::drive_download(file = as_id(projAnnualClimateUrl), path = projAnnualClimateArchive)
-    archive::archive_extract(projAnnualClimateArchive, projAnnualClimatePath)
-  }
+    if (!file.exists(projAnnualClimateArchive)) {
+      ## need to download and extract w/o prepInputs to preserve folder structure!
+      googledrive::drive_download(file = as_id(projAnnualClimateUrl), path = projAnnualClimateArchive)
+      archive::archive_extract(projAnnualClimateArchive, projAnnualClimatePath)
+    }
 
-  projCMIATA <- Cache(makeLandRCS_projectedCMIandATA,
-                      normalMAT = normals[["MATnormal"]],
-                      pathToFutureRasters = file.path(projAnnualClimatePath, mod$studyAreaNameLong),
-                      years = P(sim)$projectedFireYears,
-                      useCache = TRUE,
+    projCMIATA <- Cache(makeLandRCS_projectedCMIandATA,
+                        normalMAT = normals[["MATnormal"]],
+                        pathToFutureRasters = file.path(projAnnualClimatePath, mod$studyAreaNameLong),
+                        years = P(sim)$projectedFireYears,
+                        useCache = TRUE,
                       userTags = c("projectedCMIandATA", cacheTags))
   sim$ATAstack <- projCMIATA[["projectedATA"]]
   sim$CMIstack <- projCMIATA[["projectedCMI"]]
@@ -341,7 +342,8 @@ Init <- function(sim) {
                                   QC = "Quebec",
                                   SK = "Saskatchewan",
                                   YT = "Yukon",
-                                  RIA = "RIA")
+                                  RIA = "RIA",
+                                  stop("studyAreaName must be one of: ", paste(allowedStudyAreas, collapse = ", ")))
 
   mod$targetCRS <- paste("+proj=lcc +lat_1=49 +lat_2=77 +lat_0=0 +lon_0=-95",
                          "+x_0=0 +y_0=0 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0")
