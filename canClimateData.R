@@ -457,7 +457,7 @@ Init <- function(sim) {
   }
 
   if (!suppliedElsewhere("rasterToMatchReporting", sim)) {
-    sim$rasterToMatchReporting <- Cache(maskInputs, sim$rasterToMatch, sim$studyAreaReporting)
+    sim$rasterToMatchReporting <- Cache(maskInputs, sim$rasterToMatch, studyArea = sim$studyAreaReporting)
   }
 
   # ! ----- STOP EDITING ----- ! #
