@@ -431,12 +431,7 @@ Init <- function(sim) {
   }
 
   if (!suppliedElsewhere("studyAreaLarge", sim)) {
-    if (grepl("RIA", P(sim)$studyAreaName)) {
-      ## NOTE: RIA uses the same unbuffered studyArea for parameterization, sims, and reporting
       sim$studyAreaLarge <- sim$studyArea
-    } else {
-      sim$studyAreaLarge <- sim$studyArea
-    }
   }
 
   if (!suppliedElsewhere("rasterToMatch", sim)) {
@@ -451,12 +446,17 @@ Init <- function(sim) {
   }
 
   if (!suppliedElsewhere("rasterToMatchLarge", sim)) {
-    sim$rasterToMatchLarge <- sim$rasterToMatch
+    sim$rasterToMatchLarge <- Cache(LandR::prepInputsLCC,
+                                    year = 2005,
+                                    studyArea = sim$studyAreaLarge,
+                                    destinationPath = dPath,
+                                    useCache = P(sim)$.useCache,
+                                    overwrite = TRUE,
+                                    filename2 = paste0(P(sim)$studyAreaName, "_rtml.tif"))
+    #sim$rasterToMatchLarge[] <- sim$rasterToMatchLarge[] ## bring raster to memory
   }
 
   if (!suppliedElsewhere("rasterToMatchReporting", sim)) {
-    # This was raster::mask -- but that sometimes doesn't work because of incorrect dispatch that
-    #  conflicts with devtools::load_all("reproducible")
     sim$rasterToMatchReporting <- Cache(maskInputs, sim$rasterToMatch, sim$studyAreaReporting)
   }
 
