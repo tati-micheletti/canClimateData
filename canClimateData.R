@@ -290,30 +290,30 @@ Init <- function(sim) {
   )
   sim$CMInormal <- normals[["CMInormal"]]
 
-  # projAnnualClimateUrl <- dt[studyArea == P(sim)$studyAreaName &
-  #                              GCM == P(sim)$climateGCM &
-  #                              SSP == P(sim)$climateSSP &
-  #                              type == "proj_annual", GID]
-  #   projAnnualClimatePath <- checkPath(file.path(projectedClimatePath, "annual"), create = TRUE)
-  #   projAnnualClimateArchive <- file.path(dirname(projAnnualClimatePath),
-  #                                         paste0(mod$studyAreaNameLong, "_",
-  #                                                P(sim)$climateGCM, "_ssp",
-  #                                                P(sim)$climateSSP, "_annual.zip"))
-  #
-  #   if (!file.exists(projAnnualClimateArchive)) {
-  #     ## need to download and extract w/o prepInputs to preserve folder structure!
-  #     googledrive::drive_download(file = as_id(projAnnualClimateUrl), path = projAnnualClimateArchive)
-  #     archive::archive_extract(projAnnualClimateArchive, projAnnualClimatePath)
-  #   }
-  #
-  #   projCMIATA <- Cache(makeLandRCS_projectedCMIandATA,
-  #                       normalMAT = normals[["MATnormal"]],
-  #                       pathToFutureRasters = file.path(projAnnualClimatePath, mod$studyAreaNameLong),
-  #                       years = P(sim)$projectedFireYears,
-  #                       useCache = TRUE,
-  #                     userTags = c("projectedCMIandATA", cacheTags))
-  # sim$ATAstack <- projCMIATA[["projectedATA"]]
-  # sim$CMIstack <- projCMIATA[["projectedCMI"]]
+  projAnnualClimateUrl <- dt[studyArea == P(sim)$studyAreaName &
+                               GCM == P(sim)$climateGCM &
+                               SSP == P(sim)$climateSSP &
+                               type == "proj_annual", GID]
+    projAnnualClimatePath <- checkPath(file.path(projectedClimatePath, "annual"), create = TRUE)
+    projAnnualClimateArchive <- file.path(dirname(projAnnualClimatePath),
+                                          paste0(mod$studyAreaNameLong, "_",
+                                                 P(sim)$climateGCM, "_ssp",
+                                                 P(sim)$climateSSP, "_annual.zip"))
+
+    if (!file.exists(projAnnualClimateArchive)) {
+      ## need to download and extract w/o prepInputs to preserve folder structure!
+      googledrive::drive_download(file = as_id(projAnnualClimateUrl), path = projAnnualClimateArchive)
+      archive::archive_extract(projAnnualClimateArchive, projAnnualClimatePath)
+    }
+
+    projCMIATA <- Cache(makeLandRCS_projectedCMIandATA,
+                        normalMAT = normals[["MATnormal"]],
+                        pathToFutureRasters = file.path(projAnnualClimatePath, mod$studyAreaNameLong),
+                        years = P(sim)$projectedFireYears,
+                        useCache = TRUE,
+                      userTags = c("projectedCMIandATA", cacheTags))
+  sim$ATAstack <- projCMIATA[["projectedATA"]]
+  sim$CMIstack <- projCMIATA[["projectedCMI"]]
 
   ## TODO: lighten these are a heavy tests; only check a few of the layers for now
   # yearsToCheck <- sample.int(nlayers(sim$ATAstack), 10)
