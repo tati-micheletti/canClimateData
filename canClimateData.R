@@ -21,7 +21,7 @@ defineModule(sim, list(
                   "PredictiveEcology/fireSenseUtils@development (>= 0.0.4.9014)",
                   "PredictiveEcology/LandR@development",
                   "PredictiveEcology/reproducible@development (>= 1.2.8.9044)",
-                  "PredictiveEcology/SpaDES.tools@development (>= 0.3.10.9001)"),
+                  "PredictiveEcology/SpaDES.tools@development (>= 0.3.10.9002)"),
   parameters = rbind(
     #defineParameter("paramName", "paramClass", value, min, max, "parameter description"),
     defineParameter(".plotInitialTime", "numeric", NA, NA, NA,
@@ -154,12 +154,12 @@ Init <- function(sim) {
 
   stopifnot(getOption("reproducible.useNewDigestAlgorithm") == 2)
 
-    ## get pre-made DEM to use with climate data
+  ## get pre-made DEM to use with climate data
   dems <- lapply(P(sim)$studyAreaName, function(prov) {
     cacheTags <- c(prov, currentModule(sim))
     dem <- Cache(prepInputs, url = demURL[[prov]], destinationPath = dPath,
-               fun = "raster::raster",
-               useCache = P(sim)$.useCache,
+                 fun = "raster::raster",
+                 useCache = P(sim)$.useCache,
                  userTags = c(paste0("DEM_", prov), cacheTags))
     crs(dem) <- CRS("+init=epsg:4326")
     dem
@@ -167,9 +167,11 @@ Init <- function(sim) {
   dem <- SpaDES.tools::mergeRaster(dems)
 
   ## HISTORIC CLIMATE DATA
+  digestSA_RTM <- CacheDigest(list(sim$studyArea, sim$rasterToMatch))$outputHash
+
+  historicalClimatePath <- checkPath(file.path(dPath, "climate", "historic"), create = TRUE)
   histMDCs <- lapply(P(sim)$studyAreaName, function(prov) {
     cacheTags <- c(prov, currentModule(sim))
-    historicalClimatePath <- checkPath(file.path(dPath, "climate", "historic"), create = TRUE)
     historicalClimateArchive <- file.path(historicalClimatePath, paste0(mod$studyAreaNameLong[[prov]], ".zip"))
     historicalMDCfile <- file.path(historicalClimatePath, paste0("MDC_historical_", prov, ".tif"))
 
@@ -184,7 +186,7 @@ Init <- function(sim) {
     digestFiles <- digest::digest(file = historicalClimateArchive, algo = "xxhash64")
     digestYears <- CacheDigest(list(P(sim)$historicalFireYears))$outputHash
     historicalMDC <- Cache(makeMDC,
-                           inputPath = checkPath(file.path(historicalClimatePath, mod$studyAreaNameLong), create = TRUE),
+                           inputPath = checkPath(file.path(historicalClimatePath, mod$studyAreaNameLong[[prov]]), create = TRUE),
                            years = P(sim)$historicalFireYears,
                            # quick = "inputPath",
                            .cacheExtra = c(digestFiles, digestYears),
@@ -192,21 +194,18 @@ Init <- function(sim) {
                            userTags = c("historicMDC", cacheTags)
     )
 
-    historicalMDC
+    historicalMDC <- Cache(postProcessTerra,
+                           from = terra::rast(historicalMDC),
+                           to = sim$rasterToMatch,
+                           writeTo = historicalMDCfile2,
+                           quick = "writeTo",
+                           datatype = "INT2U",
+                           omitArgs = c("from", "to", "maskTo"),
+                           userTags = c("historicMDC", cacheTags),
+                           .cacheExtra = c(digestFiles, digestSA_RTM, digestYears))
+    historicalMDC <- raster::stack(historicalMDC) # fast
   })
-  historicalMDC <- SpaDES.tools::mergeRaster(histMDCs) ## TODO: does this work correctly on stacks?
-
-  digestSA_RTM <- CacheDigest(list(sim$studyArea, sim$rasterToMatch))$outputHash
-  historicalMDC <- Cache(postProcessTerra,
-                         from = terra::rast(historicalMDC),
-                         to = sim$rasterToMatch,
-                         writeTo = historicalMDCfile,
-                         quick = "writeTo",
-                         datatype = "INT2U",
-                         omitArgs = c("from", "to", "maskTo"),
-                         userTags = c("historicMDC", cacheTags),
-                         .cacheExtra = c(digestFiles, digestSA_RTM, digestYears))
-  historicalMDC <- raster::stack(historicalMDC) # fast
+  historicalMDC <- SpaDES.tools::mergeRaster(histMDCs)
 
   ## The names need "year" at the start, because not every year will have fires (data issue in RIA),
   ## so fireSense matches fires + climate rasters by year.
