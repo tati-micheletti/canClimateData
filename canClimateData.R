@@ -16,7 +16,7 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = deparse(list("README.md", "canClimateData.Rmd")),
-  reqdPkgs = list("archive", "magrittr", "raster", "sf", "sp", "spatialEco",
+  reqdPkgs = list("archive", "magrittr", "purrr", "raster", "sf", "sp", "spatialEco",
                   "PredictiveEcology/climateData@development (>= 0.0.0.9005)",
                   "PredictiveEcology/fireSenseUtils@development (>= 0.0.4.9014)",
                   "PredictiveEcology/LandR@development",
@@ -343,9 +343,10 @@ Init <- function(sim) {
           useCache = TRUE,
           userTags = c("projectedCMIandATA", cacheTags))
   })
-  projCMIATA <- SpaDES.tools::mergeRaster(projCMIATA)
-  sim$ATAstack <- projCMIATA[["projectedATA"]]
-  sim$CMIstack <- projCMIATA[["projectedCMI"]]
+  projCMIATA <- purrr::transpose(projCMIATA)
+
+  sim$ATAstack <- Cache(SpaDES.tools::mergeRaster, projCMIATA[["projectedATA"]])
+  sim$CMIstack <- Cache(SpaDES.tools::mergeRaster, projCMIATA[["projectedCMI"]])
 
   ## TODO: lighten these are a heavy tests; only check a few of the layers for now
   # yearsToCheck <- sample.int(nlayers(sim$ATAstack), 10)
