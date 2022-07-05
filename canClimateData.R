@@ -252,7 +252,7 @@ Init <- function(sim) {
 
     ## need to download and extract w/o prepInputs to preserve folder structure!
     if (!file.exists(projectedClimateArchive)) {
-      googledrive::drive_download(file = as_id(projectedClimateUrl), path = projectedClimateArchive)
+      googledrive::drive_download(file = as_id(projectedClimateUrl[[prov]]), path = projectedClimateArchive)
       archive::archive_extract(projectedClimateArchive, projectedClimatePath)
     }
     digestFiles <- digest::digest(file = projectedClimateArchive, algo = "xxhash64")
