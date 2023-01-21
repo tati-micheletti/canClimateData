@@ -11,31 +11,18 @@ defineModule(sim, list(
     person("Eliot", "McIntire", email = "eliot.mcintire@nrcan-rncan.gc.ca", role = "ctb")
   ),
   childModules = character(0),
-  version = list(canClimateData = "0.1.0"),
+  version = list(canClimateData = "0.1.1"),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = deparse(list("README.md", "canClimateData.Rmd")),
-  reqdPkgs = list("archive", "magrittr", "purrr", "raster", "sf", "sp", "spatialEco",
-                  "PredictiveEcology/climateData@development (>= 0.0.0.9005)",
+  reqdPkgs = list("archive", "digest", "googledrive", "magrittr", "purrr", "raster", "sf", "sp", "spatialEco",
+                  "PredictiveEcology/climateData@development (>= 0.0.0.9007)",
                   "PredictiveEcology/fireSenseUtils@development (>= 0.0.4.9014)",
                   "PredictiveEcology/LandR@development",
                   "PredictiveEcology/reproducible@development (>= 1.2.8.9044)",
                   "PredictiveEcology/SpaDES.tools@development (>= 0.3.10.9002)"),
   parameters = rbind(
-    #defineParameter("paramName", "paramClass", value, min, max, "parameter description"),
-    defineParameter(".plotInitialTime", "numeric", NA, NA, NA,
-                    "Describes the simulation time at which the first plot event should occur."),
-    defineParameter(".plotInterval", "numeric", NA, NA, NA,
-                    "Describes the simulation time interval between plot events."),
-    defineParameter(".saveInitialTime", "numeric", NA, NA, NA,
-                    "Describes the simulation time at which the first save event should occur."),
-    defineParameter(".saveInterval", "numeric", NA, NA, NA,
-                    "This describes the simulation time interval between save events."),
-    defineParameter(".useCache", "logical", FALSE, NA, NA,
-                    paste("Should this entire module be run with caching activated?",
-                          "This is generally intended for data-type modules, where stochasticity",
-                          "and time are not relevant")),
     defineParameter("bufferDist", "numeric", 20000, NA, NA,
                     "Distance (m) to buffer studyArea and rasterToMatch when creating 'Large' versions."),
     defineParameter("climateGCM", "character", "CNRM-ESM2-1", NA, NA,
@@ -49,7 +36,19 @@ defineModule(sim, list(
     defineParameter("projectedFireYears", "numeric", default = 2011:2100, NA, NA,
                     desc = "range of years captured by the projected climate data"),
     defineParameter("studyAreaName", "character", c("AB"), NA, NA,
-                    paste("At least one of 'AB', 'BC', 'MB', 'NT', 'ON', 'QC', 'SK', 'YT', or 'RIA'."))
+                    paste("At least one of 'AB', 'BC', 'MB', 'NT', 'ON', 'QC', 'SK', 'YT', or 'RIA'.")),
+    defineParameter(".plotInitialTime", "numeric", NA, NA, NA,
+                    "Describes the simulation time at which the first plot event should occur."),
+    defineParameter(".plotInterval", "numeric", NA, NA, NA,
+                    "Describes the simulation time interval between plot events."),
+    defineParameter(".saveInitialTime", "numeric", NA, NA, NA,
+                    "Describes the simulation time at which the first save event should occur."),
+    defineParameter(".saveInterval", "numeric", NA, NA, NA,
+                    "This describes the simulation time interval between save events."),
+    defineParameter(".useCache", "logical", FALSE, NA, NA,
+                    paste("Should this entire module be run with caching activated?",
+                          "This is generally intended for data-type modules, where stochasticity",
+                          "and time are not relevant"))
   ),
   inputObjects = bindrows(
     expectsInput("rasterToMatch", objectClass = "RasterLayer",
@@ -474,9 +473,9 @@ Init <- function(sim) {
                                studyArea = sim$studyArea,
                                destinationPath = dPath,
                                useCache = P(sim)$.useCache,
-                               overwrite = TRUE,
-                               filename2 = paste0(P(sim)$studyAreaName, "_rtm.tif"))
-    #sim$rasterToMatch[] <- sim$rasterToMatch[] ## bring raster to memory
+                               filename2 = NULL)
+    writeRaster(sim$rasterToMatch, file.path(dPath, paste0(P(sim)$studyAreaName, "_rtm.tif")),
+                datatype = "INT1U", overwrite = TRUE)
   }
 
   if (!suppliedElsewhere("rasterToMatchLarge", sim)) {
@@ -485,13 +484,15 @@ Init <- function(sim) {
                                     studyArea = sim$studyAreaLarge,
                                     destinationPath = dPath,
                                     useCache = P(sim)$.useCache,
-                                    overwrite = TRUE,
-                                    filename2 = paste0(P(sim)$studyAreaName, "_rtml.tif"))
-    #sim$rasterToMatchLarge[] <- sim$rasterToMatchLarge[] ## bring raster to memory
+                                    filename2 = NULL)
+    writeRaster(sim$rasterToMatchLarge,  file.path(dPath, paste0(P(sim)$studyAreaName, "_rtml.tif")),
+                datatype = "INT1U", overwrite = TRUE)
   }
 
   if (!suppliedElsewhere("rasterToMatchReporting", sim)) {
     sim$rasterToMatchReporting <- Cache(maskInputs, sim$rasterToMatch, studyArea = sim$studyAreaReporting)
+    writeRaster(sim$rasterToMatchReporting,  file.path(dPath, paste0(P(sim)$studyAreaName, "_rtmr.tif")),
+                datatype = "INT1U", overwrite = TRUE)
   }
 
   # ! ----- STOP EDITING ----- ! #
