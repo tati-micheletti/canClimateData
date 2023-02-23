@@ -199,7 +199,7 @@ Init <- function(sim) {
 
     ## need to download and extract w/o prepInputs to preserve folder structure!
     if (!file.exists(historicalClimateArchive)) {
-      googledrive::drive_download(file = as_id(historicalClimateURL[[prov]]), path = historicalClimateArchive)
+      googledrive::drive_download(file = googledrive::as_id(historicalClimateURL[[prov]]), path = historicalClimateArchive)
       archive::archive_extract(historicalClimateArchive, historicalClimatePath)
     }
 
@@ -237,7 +237,8 @@ Init <- function(sim) {
   historicalMDC <- updateStackYearNames(historicalMDC, Par$historicalFireYears)
   #historicalMDC[] <- historicalMDC[] ## bring raster to memory
 
-  compareRaster(historicalMDC, sim$rasterToMatch)
+  .compareRas(historicalMDC, sim$rasterToMatch)
+  # compareRaster(historicalMDC, sim$rasterToMatch)
 
   sim$historicalClimateRasters <- list("MDC" = historicalMDC)
 
@@ -258,7 +259,7 @@ Init <- function(sim) {
 
     ## need to download and extract w/o prepInputs to preserve folder structure!
     if (!file.exists(projectedClimateArchive)) {
-      googledrive::drive_download(file = as_id(projectedClimateUrl[[prov]]), path = projectedClimateArchive)
+      googledrive::drive_download(file = googledrive::as_id(projectedClimateUrl[[prov]]), path = projectedClimateArchive)
       archive::archive_extract(projectedClimateArchive, projectedClimatePath)
     }
     digestFiles <- digest::digest(file = projectedClimateArchive, algo = "xxhash64")
@@ -310,7 +311,7 @@ Init <- function(sim) {
 
     if (!file.exists(normalsClimateArchive)) {
       ## need to download and extract w/o prepInputs to preserve folder structure!
-      googledrive::drive_download(file = as_id(normalsClimateUrl), path = normalsClimateArchive)
+      googledrive::drive_download(file = googledrive::as_id(normalsClimateUrl), path = normalsClimateArchive)
       archive::archive_extract(normalsClimateArchive, normalsClimatePath)
     }
 
@@ -338,7 +339,7 @@ Init <- function(sim) {
 
     if (!file.exists(projAnnualClimateArchive)) {
       ## need to download and extract w/o prepInputs to preserve folder structure!
-      googledrive::drive_download(file = as_id(projAnnualClimateUrl), path = projAnnualClimateArchive)
+      googledrive::drive_download(file = googledrive::as_id(projAnnualClimateUrl), path = projAnnualClimateArchive)
       archive::archive_extract(projAnnualClimateArchive, projAnnualClimatePath)
     }
 
