@@ -7,7 +7,7 @@ defineModule(sim, list(
   keywords = "",
   authors = c(
     person("Ian", "Eddy", email = "ian.eddy@nrcan-rncan.gc.ca", role = "aut"),
-    person("Alex M", "Chubaty", email = "achubaty@for-cast.ca", role = "aut"),
+    person("Alex M", "Chubaty", email = "achubaty@for-cast.ca", role = c("aut", "cre")),
     person("Eliot", "McIntire", email = "eliot.mcintire@nrcan-rncan.gc.ca", role = "ctb")
   ),
   childModules = character(0),
@@ -36,7 +36,8 @@ defineModule(sim, list(
     defineParameter("projectedFireYears", "numeric", default = 2011:2100, NA, NA,
                     desc = "range of years captured by the projected climate data"),
     defineParameter("studyAreaName", "character", c("AB"), NA, NA,
-                    paste("At least one of 'AB', 'BC', 'MB', 'NT', 'ON', 'QC', 'SK', 'YT', or 'RIA'.")),
+                    paste("Must contain at least one of 'AB', 'BC', 'MB', 'NT', 'ON', 'QC', 'SK', 'YT', or 'RIA'.",
+                          "E.g., `'ON_AOU'`, or `c('AB', 'SK')`.")),
     defineParameter(".plotInitialTime", "numeric", NA, NA, NA,
                     "Describes the simulation time at which the first plot event should occur."),
     defineParameter(".plotInterval", "numeric", NA, NA, NA,
@@ -112,7 +113,9 @@ Init <- function(sim) {
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
 
   ## WORKAROUND: mod not working?
-  mod$studyAreaNameLong <- sapply(P(sim)$studyAreaName, switch,
+
+  mod$studyAreaNameShort <- gsub("^(AB|BC|MB|NT|NU|ON|QC|SK|YT|RIA).*", "\\1", P(sim)$studyAreaName)
+  mod$studyAreaNameLong <- sapply(mod$studyAreaNameShort, switch,
                                   AB = "Alberta",
                                   BC = "British Columbia",
                                   MB = "Manitoba",
@@ -140,21 +143,21 @@ Init <- function(sim) {
 
   ## studyArea-specific shapefiles and rasters
   allowedStudyAreas <- c("AB", "BC", "MB", "NT", "NU", "ON", "QC", "SK", "YT", "RIA")
-  stopifnot(all(P(sim)$studyAreaName %in% allowedStudyAreas))
+  stopifnot(all(mod$studyAreaNameShort %in% allowedStudyAreas))
 
   dt <- data.table::fread(file = file.path(dataPath(sim), "climateDataURLs.csv"))
 
   ## lookup table to get climate urls  based on studyArea, GCM, and SSP
-  historicalClimateURL <- dt[studyArea %in% P(sim)$studyAreaName & type == "hist_monthly", GID]
-  names(historicalClimateURL) <- P(sim)$studyAreaName
+  historicalClimateURL <- dt[studyArea %in% mod$studyAreaNameShort & type == "hist_monthly", GID]
+  names(historicalClimateURL) <- mod$studyAreaNameShort
 
-  projectedClimateUrl <- dt[studyArea %in% P(sim)$studyAreaName &
+  projectedClimateUrl <- dt[studyArea %in% mod$studyAreaNameShort &
                               GCM == P(sim)$climateGCM &
                               SSP == P(sim)$climateSSP &
                               type == "proj_monthly", GID]
-  names(projectedClimateUrl) <- P(sim)$studyAreaName
+  names(projectedClimateUrl) <- mod$studyAreaNameShort
 
-  demURL <- sapply(P(sim)$studyAreaName, switch,
+  demURL <- sapply(mod$studyAreaNameShort, switch,
                    AB = "https://drive.google.com/file/d/1g1SEU65zje6686pQXQzVVQQc44IXaznr/",
                    BC = "https://drive.google.com/file/d/1DaAYFr0z38qmbZcz452QPMP_fzwUIqLD/",
                    MB = "https://drive.google.com/file/d/1X7b2CE6QyCvik3UG9pUj6zc4b5UYZi8w/",
@@ -171,7 +174,7 @@ Init <- function(sim) {
   stopifnot(getOption("reproducible.useNewDigestAlgorithm") == 2)
 
   ## get pre-made DEM to use with climate data
-  dems <- lapply(P(sim)$studyAreaName, function(prov) {
+  dems <- lapply(mod$studyAreaNameShort, function(prov) {
     cacheTags <- c(prov, currentModule(sim))
     dem <- Cache(prepInputs, url = demURL[[prov]], destinationPath = dPath,
                  fun = "raster::raster",
@@ -186,10 +189,12 @@ Init <- function(sim) {
   digestSA_RTM <- CacheDigest(list(sim$studyArea, sim$rasterToMatch))$outputHash
 
   historicalClimatePath <- checkPath(file.path(dPath, "climate", "historic"), create = TRUE)
-  histMDCs <- lapply(P(sim)$studyAreaName, function(prov) {
-    cacheTags <- c(prov, currentModule(sim))
+  histMDCs <- lapply(mod$studyAreaNameShort, function(prov) {
+    cacheTags <- c(P(sim)$studyAreaName, currentModule(sim))
     historicalClimateArchive <- file.path(historicalClimatePath, paste0(mod$studyAreaNameLong[[prov]], ".zip"))
-    historicalMDCfile <- file.path(historicalClimatePath, paste0("MDC_historical_", prov, ".tif"))
+    historicalMDCfile <- file.path(historicalClimatePath,
+                                   paste0("MDC_historical_",
+                                          paste(P(sim)$studyAreaName, collapse = "_"), ".tif"))
 
     ## need to download and extract w/o prepInputs to preserve folder structure!
     if (!file.exists(historicalClimateArchive)) {
@@ -239,7 +244,7 @@ Init <- function(sim) {
   projectedClimatePath <- checkPath(file.path(dPath, "climate", "future",
                                               paste0(P(sim)$climateGCM, "_ssp", P(sim)$climateSSP)), create = TRUE)
 
-  projMDCs <- lapply(P(sim)$studyAreaName, function(prov) {
+  projMDCs <- lapply(mod$studyAreaNameShort, function(prov) {
     cacheTags <- c(prov, currentModule(sim))
     projectedClimateArchive <- file.path(dirname(projectedClimatePath),
                                          paste0(mod$studyAreaNameLong[[prov]], "_",
@@ -247,7 +252,8 @@ Init <- function(sim) {
                                                 P(sim)$climateSSP, ".zip"))
     projectedMDCfile <- file.path(dirname(projectedClimatePath),
                                   paste0("MDC_future_", P(sim)$climateGCM,
-                                         "_ssp", P(sim)$climateSSP, "_", prov, ".tif"))
+                                         "_ssp", P(sim)$climateSSP, "_",
+                                         paste(P(sim)$studyAreaName, collapse = "_"), ".tif"))
 
     ## need to download and extract w/o prepInputs to preserve folder structure!
     if (!file.exists(projectedClimateArchive)) {
@@ -295,7 +301,7 @@ Init <- function(sim) {
   ## 4) run makeLandRCS_projectedCMIandATA, with normal MAT as an input arg. It returns a list of raster stacks (projected ATA and CMI). Assign both to sim
   ## 5) Profit
 
-  norms <- lapply(P(sim)$studyAreaName, function(prov) {
+  norms <- lapply(mod$studyAreaNameShort, function(prov) {
     cacheTags <- c(prov, currentModule(sim))
     normalsClimateUrl <- dt[studyArea == prov & type == "hist_normals", GID]
     normalsClimatePath <- checkPath(file.path(historicalClimatePath, "normals"), create = TRUE)
@@ -317,7 +323,7 @@ Init <- function(sim) {
   normals <- SpaDES.tools::mergeRaster(norms)
   sim$CMInormal <- normals[["CMInormal"]]
 
-  projCMIATA <- lapply(P(sim)$studyAreaName, function(prov) {
+  projCMIATA <- lapply(mod$studyAreaNameShort, function(prov) {
     cacheTags <- c(prov, currentModule(sim))
     projAnnualClimateUrl <- dt[studyArea == prov &
                                  GCM == P(sim)$climateGCM &
@@ -364,7 +370,8 @@ Init <- function(sim) {
 
   # ! ----- EDIT BELOW ----- ! #
 
-  mod$studyAreaNameLong <- sapply(P(sim)$studyAreaName, switch,
+  mod$studyAreaNameShort <- gsub("^(AB|BC|MB|NT|NU|ON|QC|SK|YT|RIA).*", "\\1", P(sim)$studyAreaName)
+  mod$studyAreaNameLong <- sapply(mod$studyAreaNameShort, switch,
                                   AB = "Alberta",
                                   BC = "British Columbia",
                                   MB = "Manitoba",
