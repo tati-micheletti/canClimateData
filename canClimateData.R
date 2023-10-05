@@ -11,17 +11,17 @@ defineModule(sim, list(
     person("Eliot", "McIntire", email = "eliot.mcintire@nrcan-rncan.gc.ca", role = "ctb")
   ),
   childModules = character(0),
-  version = list(canClimateData = "0.1.1"),
+  version = list(canClimateData = "1.0.0"),
   timeframe = as.POSIXlt(c(NA, NA)),
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = deparse(list("README.md", "canClimateData.Rmd")),
-  reqdPkgs = list("archive", "digest", "googledrive", "magrittr", "purrr", "raster", "sf", "sp", "spatialEco",
-                  "PredictiveEcology/climateData@development (>= 0.0.0.9007)",
-                  "PredictiveEcology/fireSenseUtils@development (>= 0.0.4.9014)",
-                  "PredictiveEcology/LandR@development",
-                  "PredictiveEcology/reproducible@development (>= 1.2.8.9044)",
-                  "PredictiveEcology/SpaDES.tools@development (>= 0.3.10.9002)"),
+  reqdPkgs = list("archive", "digest", "geodata", "googledrive", "purrr", "sf", "spatialEco", "terra",
+                  "PredictiveEcology/climateData@development (>= 1.0.1)",
+                  "PredictiveEcology/fireSenseUtils@development (>= 0.0.5.9046)",
+                  "PredictiveEcology/LandR@development (>= 1.1.0.9064)",
+                  "PredictiveEcology/reproducible@development (>= 2.0.8.9001)",
+                  "PredictiveEcology/SpaDES.tools@development (>= 2.0.4.9002)"),
   parameters = rbind(
     defineParameter("bufferDist", "numeric", 20000, NA, NA,
                     "Distance (m) to buffer studyArea and rasterToMatch when creating 'Large' versions."),
@@ -52,32 +52,30 @@ defineModule(sim, list(
                           "and time are not relevant"))
   ),
   inputObjects = bindrows(
-    expectsInput("rasterToMatch", objectClass = "RasterLayer",
+    expectsInput("rasterToMatch", "SpatRaster",
                  desc = "template raster", sourceURL = NA),
-    expectsInput("rasterToMatchLarge", objectClass = "RasterLayer",
+    expectsInput("rasterToMatchLarge", "SpatRaster",
                  desc = "template raster for larger area", sourceURL = NA),
-    expectsInput("rasterToMatchReporting", objectClass = "RasterLayer",
+    expectsInput("rasterToMatchReporting", "SpatRaster",
                  desc = "template raster for reporting area", sourceURL = NA),
-    expectsInput("studyArea", objectClass = "SpatialPolygonsDataFrame",
+    expectsInput("studyArea", "sf",
                  desc = "study area used for simulation (buffered to mitigate edge effects)",
                  sourceURL = NA),
-    expectsInput("studyAreaLarge", objectClass = "SpatialPolygonsDataFrame",
-                 desc = "study area used for module parameterization (buffered)",
-                 sourceURL = NA),
-    expectsInput("studyAreaReporting", objectClass = "SpatialPolygonsDataFrame",
-                 desc = "study area used for reporting/post-processing",
-                 sourceURL = NA)
+    expectsInput("studyAreaLarge", "sf",
+                 desc = "study area used for module parameterization (buffered)", sourceURL = NA),
+    expectsInput("studyAreaReporting", "sf",
+                 desc = "study area used for reporting/post-processing", sourceURL = NA)
   ),
   outputObjects = bindrows(
-    createsOutput("ATAstack", "RasterStack",
+    createsOutput("ATAstack", "SpatRaster",
                   desc = "annual projected mean annual temperature anomalies, units stored as tenth of a degree"),
-    createsOutput("CMIstack", "RasterStack",
+    createsOutput("CMIstack", "SpatRaster",
                   desc = "annual projected mean climate moisture deficit"),
-    createsOutput("CMInormal", "RasterLayer",
+    createsOutput("CMInormal", "SpatRaster",
                   desc = "Climate Moisture Index Normals from 1950-2010"),
-    createsOutput("historicalClimateRasters", objectClass = "list",
+    createsOutput("historicalClimateRasters", "list",
                   desc = "list of a single raster stack - historical MDC calculated from ClimateNA data"),
-    createsOutput("projectedClimateRasters", objectClass = "list",
+    createsOutput("projectedClimateRasters", "list",
                   desc = "list of a single raster stack - projected MDC calculated from ClimateNA data")
   )
 ))
@@ -113,7 +111,6 @@ Init <- function(sim) {
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
 
   ## WORKAROUND: mod not working?
-
   mod$studyAreaNameShort <- gsub("^(AB|BC|MB|NT|NU|ON|QC|SK|YT|RIA).*", "\\1", P(sim)$studyAreaName)
   mod$studyAreaNameLong <- sapply(mod$studyAreaNameShort, switch,
                                   AB = "Alberta",
@@ -176,11 +173,13 @@ Init <- function(sim) {
   ## get pre-made DEM to use with climate data
   dems <- lapply(mod$studyAreaNameShort, function(prov) {
     cacheTags <- c(prov, currentModule(sim))
-    dem <- Cache(prepInputs, url = demURL[[prov]], destinationPath = dPath,
-                 fun = "raster::raster",
+    dem <- Cache(prepInputs,
+                 url = demURL[[prov]],
+                 destinationPath = dPath,
+                 fun = "terra::rast",
                  useCache = P(sim)$.useCache,
                  userTags = c(paste0("DEM_", prov), cacheTags))
-    crs(dem) <- CRS("+init=epsg:4326")
+    crs(dem) <- crs("epsg:4326")
     dem
   })
   dem <- SpaDES.tools::mergeRaster(dems)
@@ -188,7 +187,8 @@ Init <- function(sim) {
   ## HISTORIC CLIMATE DATA
   digestSA_RTM <- CacheDigest(list(sim$studyArea, sim$rasterToMatch))$outputHash
 
-  historicalClimatePath <- checkPath(file.path(dPath, "climate", "historic"), create = TRUE)
+  historicalClimatePath <- file.path(dPath, "climate", "historic") |>
+    checkPath(create = TRUE)
   histMDCs <- lapply(mod$studyAreaNameShort, function(prov) {
     cacheTags <- c(P(sim)$studyAreaName, currentModule(sim))
     historicalClimateArchive <- file.path(historicalClimatePath, paste0(mod$studyAreaNameLong[[prov]], ".zip"))
@@ -206,26 +206,26 @@ Init <- function(sim) {
     ##   do it once here and pass to each subsequent through .cacheExtra
     digestFiles <- digest::digest(file = historicalClimateArchive, algo = "xxhash64")
     digestYears <- CacheDigest(list(P(sim)$historicalFireYears))$outputHash
+
     historicalMDC <- Cache(makeMDC,
                            inputPath = checkPath(file.path(historicalClimatePath,
                                                            mod$studyAreaNameLong[[prov]]), create = TRUE),
                            years = P(sim)$historicalFireYears,
-                           # quick = "inputPath",
                            .cacheExtra = c(digestFiles, digestYears),
-                           omitArgs = c("years", "inputPath"),
-                           userTags = c("historicMDC", cacheTags)
-    )
+                           omitArgs = c("inputPath"),
+                           userTags = c("historicMDC", cacheTags))
 
-    historicalMDC <- Cache(postProcessTerra,
-                           from = terra::rast(historicalMDC),
+    historicalMDC <- Cache(postProcessTo,
+                           from = historicalMDC,
                            to = sim$rasterToMatch,
+                           maskTo = sim$studyArea,
                            writeTo = historicalMDCfile,
                            quick = "writeTo",
                            datatype = "INT2U",
-                           omitArgs = c("from", "to", "maskTo"),
                            userTags = c("historicMDC", cacheTags),
                            .cacheExtra = c(digestFiles, digestSA_RTM, digestYears))
-    historicalMDC <- raster::stack(historicalMDC) # fast
+
+    return(historicalMDC)
   })
   historicalMDC <- SpaDES.tools::mergeRaster(histMDCs)
 
@@ -234,15 +234,15 @@ Init <- function(sim) {
   ## WARNING: names(historicalMDC) <- paste0('year', P(sim)$historicalFireYears) # Bad
   ##          |-> allows for index mismatching
   historicalMDC <- updateStackYearNames(historicalMDC, Par$historicalFireYears)
-  #historicalMDC[] <- historicalMDC[] ## bring raster to memory
 
-  compareRaster(historicalMDC, sim$rasterToMatch)
+  compareGeom(historicalMDC, sim$rasterToMatch)
 
   sim$historicalClimateRasters <- list("MDC" = historicalMDC)
 
   ## FUTURE CLIMATE DATA
-  projectedClimatePath <- checkPath(file.path(dPath, "climate", "future",
-                                              paste0(P(sim)$climateGCM, "_ssp", P(sim)$climateSSP)), create = TRUE)
+  projectedClimatePath <- file.path(dPath, "climate", "future",
+                                    paste0(P(sim)$climateGCM, "_ssp", P(sim)$climateSSP)) |>
+    checkPath(create = TRUE)
 
   projMDCs <- lapply(mod$studyAreaNameShort, function(prov) {
     cacheTags <- c(prov, currentModule(sim))
@@ -267,30 +267,26 @@ Init <- function(sim) {
       makeMDC,
       inputPath = file.path(projectedClimatePath, mod$studyAreaNameLong[[prov]]),
       years = P(sim)$projectedFireYears,
-      # quick = "inputPath",
       userTags = c("projectedMDC", cacheTags),
-      .cacheExtra = c(digestFiles, digestSA_RTM, digestYears), # digestYears is studyArea & rasterToMatch
-      omitArgs = c("years", "inputPath")
+      .cacheExtra = c(digestFiles, digestSA_RTM, digestYears),
+      omitArgs = c("inputPath")
     )
 
-    projectedMDC <- Cache(postProcessTerra,
-                          from = terra::rast(projectedMDC),
+    projectedMDC <- Cache(postProcessTo,
+                          from = projectedMDC,
                           to = sim$rasterToMatch,
                           maskTo = sim$studyArea,
                           writeTo = projectedMDCfile,
                           quick = "writeTo",
                           datatype = "INT2U",
-                          omitArgs = c("from", "to", "maskTo"),
                           userTags = c("projectedMDC", cacheTags),
                           .cacheExtra = c(digestFiles, digestSA_RTM, digestYears))
-    projectedMDC <- raster::stack(projectedMDC) # fast
-  })
+  }) ## TODO: why is Cache sometimes returning historical mdc ???????
   projectedMDC <- SpaDES.tools::mergeRaster(projMDCs)
 
   ## WARNING: names(projectedMDC) <- paste0('year', P(sim)$projectedFireYears) # Bad
   ##          |-> allows for index mismatching
   projectedMDC <- updateStackYearNames(projectedMDC, Par$projectedFireYears)
-  #projectedMDC[] <- projectedMDC[] ## bring raster to memory
 
   sim$projectedClimateRasters <- list("MDC" = projectedMDC)
 
@@ -329,7 +325,8 @@ Init <- function(sim) {
                                  GCM == P(sim)$climateGCM &
                                  SSP == P(sim)$climateSSP &
                                  type == "proj_annual", GID]
-    projAnnualClimatePath <- checkPath(file.path(projectedClimatePath, "annual"), create = TRUE)
+    projAnnualClimatePath <- file.path(projectedClimatePath, "annual") |>
+      checkPath(create = TRUE)
     projAnnualClimateArchive <- file.path(dirname(projAnnualClimatePath),
                                           paste0(mod$studyAreaNameLong[[prov]], "_",
                                                  P(sim)$climateGCM, "_ssp",
@@ -347,8 +344,8 @@ Init <- function(sim) {
           years = P(sim)$projectedFireYears,
           useCache = TRUE,
           userTags = c("projectedCMIandATA", cacheTags))
-  })
-  projCMIATA <- purrr::transpose(projCMIATA)
+  }) |>
+    purrr::transpose()
 
   sim$ATAstack <- Cache(SpaDES.tools::mergeRaster, projCMIATA[["projectedATA"]])
   sim$CMIstack <- Cache(SpaDES.tools::mergeRaster, projCMIATA[["projectedCMI"]])
@@ -382,7 +379,7 @@ Init <- function(sim) {
                                   SK = "Saskatchewan",
                                   YT = "Yukon",
                                   RIA = "RIA")
-
+  ## TODO: ensure defaults work using terra/sf
   mod$targetCRS <- paste("+proj=lcc +lat_1=49 +lat_2=77 +lat_0=0 +lon_0=-95",
                          "+x_0=0 +y_0=0 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0")
 
@@ -402,41 +399,31 @@ Init <- function(sim) {
                     url = "https://drive.google.com/file/d/1enlgSf4-EJKuHZL4J79TQthoktSRBarQ/",
                     fun = "sf::read_sf",
                     filename2 = NULL,
-                    userTags = c("stable", currentModule(sim), "prepInputs:boreal")) %>%
-      as("Spatial") %>%
-      aggregate() %>%
+                    userTags = c("stable", currentModule(sim), "prepInputs:boreal")) |>
+      st_union() |>
       spatialEco::remove.holes()
 
-    if (packageVersion("reproducible") >= "1.2.5") {
-      fn1 <- function(x) {
-        x <- readRDS(x)
-        x <- st_as_sf(x)
-        st_transform(x, mod$targetCRS)
-      }
-    } else {
-      fn1 <- "readRDS"
+    fn1 <- function(x) {
+      x <- readRDS(x)
+      x <- st_as_sf(x)
+      st_transform(x, mod$targetCRS)
     }
+
     canProvs <- Cache(prepInputs,
                       "GADM",
-                      #fun = "base::readRDS",
                       fun = fn1,
-                      dlFun = "raster::getData",
+                      dlFun = "geodata::gadm",
                       country = "CAN", level = 1, path = dPath,
                       #targetCRS = mod$targetCRS, ## TODO: fails on Windows
                       targetFile = "gadm36_CAN_1_sp.rds", ## TODO: this will change as GADM data update
                       destinationPath = dPath,
-                      useCache = P(sim)$.useCache) #%>%
-    if (packageVersion("reproducible") < "1.2.5") {
-      canProvs <- st_as_sf(canProvs) %>%
-        st_transform(., mod$targetCRS)
-    }
+                      useCache = P(sim)$.useCache)
 
     borealProvs <- canProvs[canProvs$NAME_1 %in% studyAreasWithData, ]
 
     mod$borealStudyArea <- Cache(postProcess, borealProvs, studyArea = boreal, useSAcrs = TRUE,
                                  useCache = P(sim)$.useCache,
-                                 filename2 = NULL, overwrite = TRUE) %>%
-      as_Spatial(.)
+                                 filename2 = NULL, overwrite = TRUE)
 
     if (grepl("RIA", P(sim)$studyAreaName)) {
       studyAreaUrl <- "https://drive.google.com/file/d/1LxacDOobTrRUppamkGgVAUFIxNT4iiHU/"
@@ -444,12 +431,12 @@ Init <- function(sim) {
       ## But if RIA SA = SAL, or RTM = RTML, it falls apart.
       sim$studyArea <- Cache(prepInputs, url = studyAreaUrl,
                              destinationPath = dPath,
-                             userTags = c("studyArea", P(sim)$studyAreaName, cacheTags)) %>%
-        sf::st_as_sf(.) %>%
-        .[.$TSA_NUMBER %in% c("40", "08", "41", "24", "16"),] %>%
-        sf::st_buffer(., 0) %>%
-        sf::as_Spatial(.) %>%
-        raster::aggregate(.)
+                             userTags = c("studyArea", P(sim)$studyAreaName, cacheTags)) |>
+        sf::st_as_sf() |>
+        subset(TSA_NUMBER %in% c("40", "08", "41", "24", "16")) |>
+        sf::st_buffer(0) |>
+        sf::as_Spatial() |>
+        terra::agg()
     } else if (grepl("NT|NU", P(sim)$studyAreaName)) {
       ## NOTE: run NT and NU together!
       message("NWT and NU will both be run together as a single study area.")
@@ -458,7 +445,7 @@ Init <- function(sim) {
       sim$studyArea <- mod$borealStudyArea[mod$borealStudyArea$NAME_1 %in% mod$studyAreaNameLong, ]
     }
 
-    sim$studyArea <- spTransform(sim$studyArea, mod$targetCRS)
+    sim$studyArea <- st_transform(sim$studyArea, mod$targetCRS)
   }
 
   if (!suppliedElsewhere("studyAreaReporting", sim)) {
@@ -467,7 +454,7 @@ Init <- function(sim) {
 
   if (!suppliedElsewhere("studyArea", sim)) {
     ## NOTE: studyArea and studyAreaLarge are the same [buffered] area
-    sim$studyArea <- buffer(sim$studyArea, P(sim)$bufferDist)
+    sim$studyArea <- st_buffer(sim$studyArea, P(sim)$bufferDist)
   }
 
   if (!suppliedElsewhere("studyAreaLarge", sim)) {
