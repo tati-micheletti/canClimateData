@@ -122,12 +122,12 @@ Init <- function(sim) {
     mod$studyAreaNameLong <- sapply(mod$studyAreaNameShort, switch,
                                     AB = "Alberta",
                                     BC = "British Columbia",
-                                  MB = "Manitoba",
-                                  NT = "Northwest Territories & Nunavut",
-                                  NU = "Northwest Territories & Nunavut",
-                                  ON = "Ontario",
-                                  QC = "Quebec",
-                                  SK = "Saskatchewan",
+                                    MB = "Manitoba",
+                                    NT = "Northwest Territories & Nunavut",
+                                    NU = "Northwest Territories & Nunavut",
+                                    ON = "Ontario",
+                                    QC = "Quebec",
+                                    SK = "Saskatchewan",
                                     YT = "Yukon",
                                     RIA = "RIA")
 
@@ -387,19 +387,28 @@ Init <- function(sim) {
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
 
   # ! ----- EDIT BELOW ----- ! #
-
   mod$studyAreaNameShort <- gsub("^(AB|BC|MB|NT|NU|ON|QC|SK|YT|RIA).*", "\\1", P(sim)$studyAreaName)
-  mod$studyAreaNameLong <- sapply(mod$studyAreaNameShort, switch,
-                                  AB = "Alberta",
-                                  BC = "British Columbia",
-                                  MB = "Manitoba",
-                                  NT = "Northwest Territories & Nunavut",
-                                  NU = "Northwest Territories & Nunavut",
-                                  ON = "Ontario",
-                                  QC = "Quebec",
-                                  SK = "Saskatchewan",
-                                  YT = "Yukon",
-                                  RIA = "RIA")
+  if (is.na(mod$studyAreaNameShort)) {
+    canProv <- canadianProvince(sim$studyArea)
+    mod$studyAreaNameShort <- gsub("CA\\.", "", canProv$HASC_1)
+    params(sim)[[currentModule(sim)]][["studyAreaName"]] <- mod$studyAreaNameShort
+    mod$studyAreaNameLong <- canProv$NAME_1 |> setNames(mod$studyAreaNameShort)
+  } else {
+
+
+    mod$studyAreaNameShort <- gsub("^(AB|BC|MB|NT|NU|ON|QC|SK|YT|RIA).*", "\\1", P(sim)$studyAreaName)
+    mod$studyAreaNameLong <- sapply(mod$studyAreaNameShort, switch,
+                                    AB = "Alberta",
+                                    BC = "British Columbia",
+                                    MB = "Manitoba",
+                                    NT = "Northwest Territories & Nunavut",
+                                    NU = "Northwest Territories & Nunavut",
+                                    ON = "Ontario",
+                                    QC = "Quebec",
+                                    SK = "Saskatchewan",
+                                    YT = "Yukon",
+                                    RIA = "RIA")
+  }
   ## TODO: ensure defaults work using terra/sf
   mod$targetCRS <- paste("+proj=lcc +lat_1=49 +lat_2=77 +lat_0=0 +lon_0=-95",
                          "+x_0=0 +y_0=0 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0")
