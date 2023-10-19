@@ -216,23 +216,41 @@ Init <- function(sim) {
     digestFiles <- digest::digest(file = historicalClimateArchive, algo = "xxhash64")
     digestYears <- CacheDigest(list(P(sim)$historicalFireYears))$outputHash
 
-    historicalMDC <- Cache(makeMDC,
-                           inputPath = checkPath(file.path(historicalClimatePath,
-                                                           mod$studyAreaNameLong[[prov]]), create = TRUE),
-                           years = P(sim)$historicalFireYears,
-                           .cacheExtra = c(digestFiles, digestYears),
-                           omitArgs = c("inputPath"),
-                           userTags = c("historicMDC", cacheTags))
+    # historicalMDC <- Cache(makeMDC(
+    #                        inputPath = checkPath(file.path(historicalClimatePath,
+    #                                                        mod$studyAreaNameLong[[prov]]), create = TRUE),
+    #                        years = P(sim)$historicalFireYears),
+    #                        .cacheExtra = c(digestFiles, digestYears),
+    #                        omitArgs = c("inputPath"),
+    #                        userTags = c("historicMDC", cacheTags))
+    #
+    # historicalMDC <- Cache(postProcessTo,
+    #                        from = historicalMDC,
+    #                        to = sim$rasterToMatch,
+    #                        maskTo = sim$studyArea,
+    #                        writeTo = historicalMDCfile,
+    #                        quick = "writeTo",
+    #                        datatype = "INT2U",
+    #                        userTags = c("historicMDC", cacheTags),
+    #                        .cacheExtra = c(digestFiles, digestSA_RTM, digestYears))
 
-    historicalMDC <- Cache(postProcessTo,
-                           from = historicalMDC,
-                           to = sim$rasterToMatch,
-                           maskTo = sim$studyArea,
-                           writeTo = historicalMDCfile,
-                           quick = "writeTo",
-                           datatype = "INT2U",
-                           userTags = c("historicMDC", cacheTags),
-                           .cacheExtra = c(digestFiles, digestSA_RTM, digestYears))
+    # Do in one step -- using .cacheExtra -- can't use omitArgs for function in first function in { ... }
+    historicalMDC <- {
+      makeMDC(
+        inputPath = checkPath(file.path(historicalClimatePath,
+                                        mod$studyAreaNameLong[[prov]]), create = TRUE),
+        years = P(sim)$historicalFireYears) |>
+        postProcessTo(#from = historicalMDC,
+          to = sim$rasterToMatch,
+          maskTo = sim$studyArea,
+          writeTo = historicalMDCfile,
+          quick = "writeTo",
+          datatype = "INT2U")} |>
+      Cache(
+        omitArgs = c("from", "to", "maskTo", "writeTo", "to"),
+        .functionName = "makeMDC_forHistoricalMDC",
+        .cacheExtra = c(digestFiles, digestSA_RTM, digestYears),
+        userTags = c("historicMDC", cacheTags))
 
     return(historicalMDC)
   })
@@ -272,25 +290,19 @@ Init <- function(sim) {
     digestFiles <- digest::digest(file = projectedClimateArchive, algo = "xxhash64")
     digestYears <- CacheDigest(list(P(sim)$projectedFireYears))$outputHash
 
-    projectedMDC <- Cache(
-      makeMDC,
-      inputPath = file.path(projectedClimatePath, mod$studyAreaNameLong[[prov]]),
-      years = P(sim)$projectedFireYears,
-      userTags = c("projectedMDC", cacheTags),
-      .cacheExtra = c(digestFiles, digestSA_RTM, digestYears),
-      omitArgs = c("inputPath")
-    )
-
-    projectedMDC <- Cache(postProcessTo,
-                          from = projectedMDC,
-                          to = sim$rasterToMatch,
-                          maskTo = sim$studyArea,
-                          writeTo = projectedMDCfile,
-                          quick = "writeTo",
-                          datatype = "INT2U",
-                          userTags = c("projectedMDC", cacheTags),
-                          .cacheExtra = c(digestFiles, digestSA_RTM, digestYears))
-  }) ## TODO: why is Cache sometimes returning historical mdc ???????
+    projectedMDC <- {
+      makeMDC(inputPath = file.path(projectedClimatePath, mod$studyAreaNameLong[[prov]]),
+              years = P(sim)$projectedFireYears) |>
+        postProcessTo(to = sim$rasterToMatch,
+                      maskTo = sim$studyArea,
+                      writeTo = projectedMDCfile,
+                      quick = "writeTo",
+                      datatype = "INT2U")} |>
+      Cache(omitArgs = c("from", "to", "maskTo"),
+            userTags = c("projectedMDC", cacheTags),
+            .functionName = "makeMDC_forProjectedMDC",
+            .cacheExtra = c(digestFiles, digestSA_RTM, digestYears))
+  }) ## TODO: why is Cache sometimes returning historical mdc ??????? # Oct 18, 2023 -- seems OK now (Eliot)
   projectedMDC <- SpaDES.tools::mergeRaster(projMDCs)
 
   ## WARNING: names(projectedMDC) <- paste0('year', P(sim)$projectedFireYears) # Bad
