@@ -35,7 +35,7 @@ defineModule(sim, list(
                     desc = "range of years captured by the historical climate data"),
     defineParameter("projectedFireYears", "numeric", default = 2011:2100, NA, NA,
                     desc = "range of years captured by the projected climate data"),
-    defineParameter("studyAreaName", "character", c("AB"), NA, NA,
+    defineParameter("studyAreaName", "character", NA, NA, NA,
                     paste("Must contain at least one of 'AB', 'BC', 'MB', 'NT', 'ON', 'QC', 'SK', 'YT', or 'RIA'.",
                           "E.g., `'ON_AOU'`, or `c('AB', 'SK')`.")),
     defineParameter(".plotInitialTime", "numeric", NA, NA, NA,
@@ -112,17 +112,26 @@ Init <- function(sim) {
 
   ## WORKAROUND: mod not working?
   mod$studyAreaNameShort <- gsub("^(AB|BC|MB|NT|NU|ON|QC|SK|YT|RIA).*", "\\1", P(sim)$studyAreaName)
-  mod$studyAreaNameLong <- sapply(mod$studyAreaNameShort, switch,
-                                  AB = "Alberta",
-                                  BC = "British Columbia",
+  if (is.na(mod$studyAreaNameShort)) {
+    canProv <- canadianProvince(sim$studyArea)
+    mod$studyAreaNameShort <- gsub("CA\\.", "", canProv$HASC_1)
+    params(sim)[[currentModule(sim)]][["studyAreaName"]] <- mod$studyAreaNameShort
+    mod$studyAreaNameLong <- canProv$NAME_1 |> setNames(mod$studyAreaNameShort)
+  } else {
+
+    mod$studyAreaNameLong <- sapply(mod$studyAreaNameShort, switch,
+                                    AB = "Alberta",
+                                    BC = "British Columbia",
                                   MB = "Manitoba",
                                   NT = "Northwest Territories & Nunavut",
                                   NU = "Northwest Territories & Nunavut",
                                   ON = "Ontario",
                                   QC = "Quebec",
                                   SK = "Saskatchewan",
-                                  YT = "Yukon",
-                                  RIA = "RIA")
+                                    YT = "Yukon",
+                                    RIA = "RIA")
+
+  }
 
   mod$targetCRS <- paste("+proj=lcc +lat_1=49 +lat_2=77 +lat_0=0 +lon_0=-95",
                          "+x_0=0 +y_0=0 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0")
@@ -491,4 +500,12 @@ Init <- function(sim) {
 
   # ! ----- STOP EDITING ----- ! #
   return(invisible(sim))
+}
+
+canadianProvince <- function(studyArea, provCodes) {
+  Require::Install("SpaDES.project", repos = c("predictiveecology.r-universe.dev", getOption("repos")))
+  can <- setupStudyArea(list(level = 1))
+  can2 <- terra::intersect(can, studyArea)
+  can2[, names(can)]
+
 }
