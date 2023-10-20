@@ -94,6 +94,7 @@
 "NFDB_poly_update_log.txt" "9c2550bba94fea23" "9519" "xxhash64"
 "NFDB_poly.zip" "ea06b215bcb2b762" "436424005" "xxhash64"
 "NFI_MODIS250m_2011_kNN_Structure_Stand_Age_v1.tif" "ccff4929b4591b7d" "259251529" "xxhash64"
+"Northwest Territories & Nunavut.asc" "729334a5cfb99d4c" "2144157" "xxhash64"
 "RIA_1ArcMinute_CCSM4_RCP45_MDC.grd" "2e224df179aebc5a" "3241" "xxhash64"
 "RIA_1ArcMinute_CCSM4_RCP45_MDC.gri" "88a386cc1b08d7e7" "475020000" "xxhash64"
 "RIA_1ArcMinute_historicalMDC.grd" "56f54d9afd5b2bd3" "1165" "xxhash64"
