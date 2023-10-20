@@ -112,7 +112,7 @@ Init <- function(sim) {
 
   ## WORKAROUND: mod not working?
   mod$studyAreaNameShort <- gsub("^(AB|BC|MB|NT|NU|ON|QC|SK|YT|RIA).*", "\\1", P(sim)$studyAreaName)
-  if (is.na(mod$studyAreaNameShort)) {
+  if (isTRUE(is.na(mod$studyAreaNameShort)) || length(mod$studyAreaNameShort) == 0) {
     canProv <- canadianProvince(sim$studyArea)
     mod$studyAreaNameShort <- gsub("CA\\.", "", canProv$HASC_1)
     params(sim)[[currentModule(sim)]][["studyAreaName"]] <- mod$studyAreaNameShort
@@ -526,7 +526,7 @@ Init <- function(sim) {
 canadianProvince <- function(studyArea, provCodes) {
   Require::Install("SpaDES.project", repos = c("predictiveecology.r-universe.dev", getOption("repos")))
   can <- setupStudyArea(list(level = 1))
-  can2 <- terra::intersect(can, studyArea)
-  can2[, names(can)]
+  can2 <- reproducible::postProcessTo(can, to = studyArea)
+  can2[, names(can)] # keep only the columns in `can`
 
 }
