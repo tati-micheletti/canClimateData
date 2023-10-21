@@ -205,10 +205,25 @@ Init <- function(sim) {
                                    paste0("MDC_historical_",
                                           paste(P(sim)$studyAreaName, collapse = "_"), ".tif"))
 
+    baseDir <- checkPath(file.path(historicalClimatePath,
+                                   mod$studyAreaNameLong[[prov]]), create = TRUE)
     ## need to download and extract w/o prepInputs to preserve folder structure!
     if (!file.exists(historicalClimateArchive)) {
-      googledrive::drive_download(file = as_id(historicalClimateURL[[prov]]), path = historicalClimateArchive)
-      archive::archive_extract(historicalClimateArchive, historicalClimatePath)
+      # The test for files is not sufficient. The Northwest Territories is an example ... the archive
+      #   extracts to a folder called "Northwest Territories and Nunavut/",
+      #   but the sequence with googledrive::drive_download thinks it will be Northwest Territories
+      # preProcess solves this
+      out <- preProcess(url = historicalClimateURL[[prov]], archive = historicalClimateArchive,
+                        destinationPath = historicalClimatePath)
+      extractedFiles <- out$checkSums$actualFile
+      baseDir <- strsplit(extractedFiles, split = "\\\\|/") |>
+        vapply(function(x) x[[1]], FUN.VALUE = character(1)) |> # pull out first element i.e,. the leftmost directory
+        unique() |>
+        na.omit() |>
+        grep(pattern = "zip", invert = TRUE, value = TRUE) |> # get rid of zip
+        makeAbsolute(absoluteBase = historicalClimatePath)           # absolutePath
+      # googledrive::drive_download(file = as_id(historicalClimateURL[[prov]]), path = historicalClimateArchive)
+      # archive::archive_extract(historicalClimateArchive, historicalClimatePath)
     }
 
     ## all downstream stuff from this one archive file should have same Cache assessment
@@ -237,8 +252,7 @@ Init <- function(sim) {
     # Do in one step -- using .cacheExtra -- can't use omitArgs for function in first function in { ... }
     historicalMDC <- {
       makeMDC(
-        inputPath = checkPath(file.path(historicalClimatePath,
-                                        mod$studyAreaNameLong[[prov]]), create = TRUE),
+        inputPath = baseDir,
         years = P(sim)$historicalFireYears) |>
         postProcessTo(#from = historicalMDC,
           to = sim$rasterToMatch,
