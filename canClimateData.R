@@ -24,7 +24,7 @@ defineModule(sim, list(
                   "PredictiveEcology/SpaDES.tools@development (>= 2.0.4.9002)"),
   parameters = rbind(
     defineParameter("bufferDist", "numeric", 20000, NA, NA,
-                    "Distance (m) to buffer studyArea and rasterToMatch when creating 'Large' versions."),
+                    "Distance (m) to buffer `studyArea` and `rasterToMatch` when creating 'Large' versions."),
     defineParameter("climateGCM", "character", "CNRM-ESM2-1", NA, NA,
                     paste("Global Circulation Model to use for climate projections:",
                           "currently '13GCMs_ensemble', 'CanESM5', 'CNRM-ESM2-1', or 'CCSM4'.")),
@@ -35,9 +35,9 @@ defineModule(sim, list(
                     desc = "range of years captured by the historical climate data"),
     defineParameter("projectedFireYears", "numeric", default = 2011:2100, NA, NA,
                     desc = "range of years captured by the projected climate data"),
-    defineParameter("studyAreaName", "character", c("AB"), NA, NA,
-                    paste("Must contain at least one of 'AB', 'BC', 'MB', 'NT', 'ON', 'QC', 'SK', 'YT', or 'RIA'.",
-                          "E.g., `'ON_AOU'`, or `c('AB', 'SK')`.")),
+    defineParameter("studyAreaName", "character", NA_character_, NA, NA,
+                    paste("User-defined label for the current stuyd area.",
+                          "If `NA`, a hash of `studyArea` will be used.")),
     defineParameter(".plotInitialTime", "numeric", NA, NA, NA,
                     "Describes the simulation time at which the first plot event should occur."),
     defineParameter(".plotInterval", "numeric", NA, NA, NA,
@@ -110,23 +110,49 @@ doEvent.canClimateData = function(sim, eventTime, eventType) {
 Init <- function(sim) {
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
 
-  ## WORKAROUND: mod not working?
-  mod$studyAreaNameShort <- gsub("^(AB|BC|MB|NT|NU|ON|QC|SK|YT|RIA).*", "\\1", P(sim)$studyAreaName)
-  mod$studyAreaNameLong <- sapply(mod$studyAreaNameShort, switch,
-                                  AB = "Alberta",
-                                  BC = "British Columbia",
-                                  MB = "Manitoba",
-                                  NT = "Northwest Territories & Nunavut",
-                                  NU = "Northwest Territories & Nunavut",
-                                  ON = "Ontario",
-                                  QC = "Quebec",
-                                  SK = "Saskatchewan",
-                                  YT = "Yukon",
-                                  RIA = "RIA")
+  if (is.na(P(sim)$studyAreaName)) {
+    ## use unique hash as study area name
+    P(sim, "studyAreaName") <- studyAreaName(sim$studyArea)
+  }
 
+  ## ensure this matches mod$targetCRS defined in .inputObjects !!
   mod$targetCRS <- paste("+proj=lcc +lat_1=49 +lat_2=77 +lat_0=0 +lon_0=-95",
                          "+x_0=0 +y_0=0 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0")
-  ## end workaround
+
+  fn1 <- function(x) {
+    x <- readRDS(x)
+    x <- st_as_sf(x)
+    st_transform(x, mod$targetCRS)
+  }
+
+  canProvs <- Cache(prepInputs,
+                    "GADM",
+                    fun = fn1,
+                    dlFun = "geodata::gadm",
+                    country = "CAN", level = 1, path = dPath,
+                    targetFile = "gadm36_CAN_1_sp.rds", ## TODO: will change as GADM data update
+                    destinationPath = dPath,
+                    useCache = P(sim)$.useCache) |>
+    sf::st_as_sf() |>
+    sf::st_transform(mod$targetCRS)
+
+  whereAmI <- reproducible::postProcessTo(canProvs, to = sim$studyArea)$NAME_1
+
+  provsWithData <- data.frame(
+    shortName = c("AB", "BC", "MB", "NT", "NU", "ON", "QC", "SK", "YT"),
+    longName = c("Alberta", "British Columbia", "Manitoba",
+                 "Northwest Territories", "Nunavut",
+                 "Ontario", "Québec", "Saskatchewan", "Yukon"),
+    dirName = c("Alberta", "British Columbia", "Manitoba",
+                "Northwest Territories & Nunavut", "Northwest Territories & Nunavut",
+                "Ontario", "Quebec", "Saskatchewan", "Yukon") ## no accents; NT+NU together
+  )
+
+  stopifnot(all(whereAmI %in% provsWithData$longName))
+
+  mod$studyAreaNameShort <- provsWithData[provsWithData$longName %in% whereAmI, ]$shortName
+  mod$studyAreaNameDir <- provsWithData[provsWithData$longName %in% whereAmI, ]$dirName |>
+    setNames(mod$studyAreaNameShort)
 
   if (!P(sim)$climateGCM %in% c("13GCMs_ensemble", "CanESM5", "CNRM-ESM2-1", "CCSM4")) {
     stop("Invalid climate model specified.\n",
@@ -139,9 +165,6 @@ Init <- function(sim) {
   }
 
   ## studyArea-specific shapefiles and rasters
-  allowedStudyAreas <- c("AB", "BC", "MB", "NT", "NU", "ON", "QC", "SK", "YT", "RIA")
-  stopifnot(all(mod$studyAreaNameShort %in% allowedStudyAreas))
-
   dt <- data.table::fread(file = file.path(dataPath(sim), "climateDataURLs.csv"))
 
   ## lookup table to get climate urls  based on studyArea, GCM, and SSP
@@ -191,7 +214,7 @@ Init <- function(sim) {
     checkPath(create = TRUE)
   histMDCs <- lapply(mod$studyAreaNameShort, function(prov) {
     cacheTags <- c(P(sim)$studyAreaName, currentModule(sim))
-    historicalClimateArchive <- file.path(historicalClimatePath, paste0(mod$studyAreaNameLong[[prov]], ".zip"))
+    historicalClimateArchive <- file.path(historicalClimatePath, paste0(mod$studyAreaNameDir[[prov]], ".zip"))
     historicalMDCfile <- file.path(historicalClimatePath,
                                    paste0("MDC_historical_",
                                           paste(P(sim)$studyAreaName, collapse = "_"), ".tif"))
@@ -209,7 +232,7 @@ Init <- function(sim) {
 
     historicalMDC <- Cache(makeMDC,
                            inputPath = checkPath(file.path(historicalClimatePath,
-                                                           mod$studyAreaNameLong[[prov]]), create = TRUE),
+                                                           mod$studyAreaNameDir[[prov]]), create = TRUE),
                            years = P(sim)$historicalFireYears,
                            .cacheExtra = c(digestFiles, digestYears),
                            omitArgs = c("inputPath"),
@@ -247,7 +270,7 @@ Init <- function(sim) {
   projMDCs <- lapply(mod$studyAreaNameShort, function(prov) {
     cacheTags <- c(prov, currentModule(sim))
     projectedClimateArchive <- file.path(dirname(projectedClimatePath),
-                                         paste0(mod$studyAreaNameLong[[prov]], "_",
+                                         paste0(mod$studyAreaNameDir[[prov]], "_",
                                                 P(sim)$climateGCM, "_ssp",
                                                 P(sim)$climateSSP, ".zip"))
     projectedMDCfile <- file.path(dirname(projectedClimatePath),
@@ -265,7 +288,7 @@ Init <- function(sim) {
 
     projectedMDC <- Cache(
       makeMDC,
-      inputPath = file.path(projectedClimatePath, mod$studyAreaNameLong[[prov]]),
+      inputPath = file.path(projectedClimatePath, mod$studyAreaNameDir[[prov]]),
       years = P(sim)$projectedFireYears,
       userTags = c("projectedMDC", cacheTags),
       .cacheExtra = c(digestFiles, digestSA_RTM, digestYears),
@@ -301,7 +324,7 @@ Init <- function(sim) {
     cacheTags <- c(prov, currentModule(sim))
     normalsClimateUrl <- dt[studyArea == prov & type == "hist_normals", GID]
     normalsClimatePath <- checkPath(file.path(historicalClimatePath, "normals"), create = TRUE)
-    normalsClimateArchive <- file.path(normalsClimatePath, paste0(mod$studyAreaNameLong[[prov]], "_normals.zip"))
+    normalsClimateArchive <- file.path(normalsClimatePath, paste0(mod$studyAreaNameDir[[prov]], "_normals.zip"))
 
     if (!file.exists(normalsClimateArchive)) {
       ## need to download and extract w/o prepInputs to preserve folder structure!
@@ -311,7 +334,7 @@ Init <- function(sim) {
 
     Cache(
       makeLandRCS_1950_2010_normals,
-      pathToNormalRasters = file.path(normalsClimatePath, mod$studyAreaNameLong[[prov]]),
+      pathToNormalRasters = file.path(normalsClimatePath, mod$studyAreaNameDir[[prov]]),
       rasterToMatch = sim$rasterToMatch,
       userTags = c("normals", cacheTags)
     )
@@ -328,7 +351,7 @@ Init <- function(sim) {
     projAnnualClimatePath <- file.path(projectedClimatePath, "annual") |>
       checkPath(create = TRUE)
     projAnnualClimateArchive <- file.path(dirname(projAnnualClimatePath),
-                                          paste0(mod$studyAreaNameLong[[prov]], "_",
+                                          paste0(mod$studyAreaNameDir[[prov]], "_",
                                                  P(sim)$climateGCM, "_ssp",
                                                  P(sim)$climateSSP, "_annual.zip"))
 
@@ -340,7 +363,7 @@ Init <- function(sim) {
 
     Cache(makeLandRCS_projectedCMIandATA,
           normalMAT = normals[["MATnormal"]],
-          pathToFutureRasters = file.path(projAnnualClimatePath, mod$studyAreaNameLong[[prov]]),
+          pathToFutureRasters = file.path(projAnnualClimatePath, mod$studyAreaNameDir[[prov]]),
           years = P(sim)$projectedFireYears,
           useCache = TRUE,
           userTags = c("projectedCMIandATA", cacheTags))
@@ -367,85 +390,16 @@ Init <- function(sim) {
 
   # ! ----- EDIT BELOW ----- ! #
 
-  mod$studyAreaNameShort <- gsub("^(AB|BC|MB|NT|NU|ON|QC|SK|YT|RIA).*", "\\1", P(sim)$studyAreaName)
-  mod$studyAreaNameLong <- sapply(mod$studyAreaNameShort, switch,
-                                  AB = "Alberta",
-                                  BC = "British Columbia",
-                                  MB = "Manitoba",
-                                  NT = "Northwest Territories & Nunavut",
-                                  NU = "Northwest Territories & Nunavut",
-                                  ON = "Ontario",
-                                  QC = "Quebec",
-                                  SK = "Saskatchewan",
-                                  YT = "Yukon",
-                                  RIA = "RIA")
   ## TODO: ensure defaults work using terra/sf
   mod$targetCRS <- paste("+proj=lcc +lat_1=49 +lat_2=77 +lat_0=0 +lon_0=-95",
                          "+x_0=0 +y_0=0 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0")
 
   if (!suppliedElsewhere("studyArea", sim)) {
-    #### Prep study-area specific objects ####
-    ## when adding study areas, add relevant climate urls, rtm and sa
-
-    studyAreasWithData <- c("British Columbia", "Alberta", "Saskatchewan", "Manitoba", "Ontario",
-                            "Québec", "Yukon", "Northwest Territories", "Nunavut")
-
-    ## no direct url - site makes you click thru user agreement with randomized download url
-    boreal <- Cache(prepInputs,
-                    targetFile = "NABoreal.shp",
-                    alsoExtract = "similar",
-                    archive = asPath("boreal.zip"),
-                    destinationPath = dPath,
-                    url = "https://drive.google.com/file/d/1enlgSf4-EJKuHZL4J79TQthoktSRBarQ/",
-                    fun = "sf::read_sf",
-                    filename2 = NULL,
-                    userTags = c("stable", currentModule(sim), "prepInputs:boreal")) |>
-      st_union() |>
-      spatialEco::remove.holes()
-
-    fn1 <- function(x) {
-      x <- readRDS(x)
-      x <- st_as_sf(x)
-      st_transform(x, mod$targetCRS)
-    }
-
-    canProvs <- Cache(prepInputs,
-                      "GADM",
-                      fun = fn1,
-                      dlFun = "geodata::gadm",
-                      country = "CAN", level = 1, path = dPath,
-                      #targetCRS = mod$targetCRS, ## TODO: fails on Windows
-                      targetFile = "gadm36_CAN_1_sp.rds", ## TODO: this will change as GADM data update
-                      destinationPath = dPath,
-                      useCache = P(sim)$.useCache)
-
-    borealProvs <- canProvs[canProvs$NAME_1 %in% studyAreasWithData, ]
-
-    mod$borealStudyArea <- Cache(postProcess, borealProvs, studyArea = boreal, useSAcrs = TRUE,
-                                 useCache = P(sim)$.useCache,
-                                 filename2 = NULL, overwrite = TRUE)
-
-    if (grepl("RIA", P(sim)$studyAreaName)) {
-      studyAreaUrl <- "https://drive.google.com/file/d/1LxacDOobTrRUppamkGgVAUFIxNT4iiHU/"
-      ## originally, I thought this could be defined after the IF clause as Eliot suggested.
-      ## But if RIA SA = SAL, or RTM = RTML, it falls apart.
-      sim$studyArea <- Cache(prepInputs, url = studyAreaUrl,
-                             destinationPath = dPath,
-                             userTags = c("studyArea", P(sim)$studyAreaName, cacheTags)) |>
-        sf::st_as_sf() |>
-        subset(TSA_NUMBER %in% c("40", "08", "41", "24", "16")) |>
-        sf::st_buffer(0) |>
-        sf::as_Spatial() |>
-        terra::agg()
-    } else if (grepl("NT|NU", P(sim)$studyAreaName)) {
-      ## NOTE: run NT and NU together!
-      message("NWT and NU will both be run together as a single study area.")
-      sim$studyArea <- mod$borealStudyArea[mod$borealStudyArea$NAME_1 %in% c("Northwest Territories", "Nunavut"), ]
-    } else {
-      sim$studyArea <- mod$borealStudyArea[mod$borealStudyArea$NAME_1 %in% mod$studyAreaNameLong, ]
-    }
-
-    sim$studyArea <- st_transform(sim$studyArea, mod$targetCRS)
+    ## random study area spanning portions of NE AB and NW SK
+    sim$studyArea <- terra::vect(cbind(-110, 58), crs = "epsg:4326") |>
+      SpaDES.tools::randomStudyArea(size = 5e10) |>
+      sf::st_as_sf() |>
+      sf::st_transform(mod$targetCRS)
   }
 
   if (!suppliedElsewhere("studyAreaReporting", sim)) {
@@ -454,11 +408,11 @@ Init <- function(sim) {
 
   if (!suppliedElsewhere("studyArea", sim)) {
     ## NOTE: studyArea and studyAreaLarge are the same [buffered] area
-    sim$studyArea <- st_buffer(sim$studyArea, P(sim)$bufferDist)
+    sim$studyArea <- sf::st_buffer(sim$studyArea, P(sim)$bufferDist)
   }
 
   if (!suppliedElsewhere("studyAreaLarge", sim)) {
-      sim$studyAreaLarge <- sim$studyArea
+    sim$studyAreaLarge <- sim$studyArea
   }
 
   if (!suppliedElsewhere("rasterToMatch", sim)) {
