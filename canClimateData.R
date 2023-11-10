@@ -399,9 +399,7 @@ Init <- function(sim) {
     mod$studyAreaNameShort <- gsub("CA\\.", "", canProv$HASC_1)
     params(sim)[[currentModule(sim)]][["studyAreaName"]] <- mod$studyAreaNameShort
     mod$studyAreaNameLong <- canProv$NAME_1 |> setNames(mod$studyAreaNameShort)
-  } else {
-
-
+    } else {
     mod$studyAreaNameShort <- gsub("^(AB|BC|MB|NT|NU|ON|QC|SK|YT|RIA).*", "\\1", P(sim)$studyAreaName)
     mod$studyAreaNameLong <- sapply(mod$studyAreaNameShort, switch,
                                     AB = "Alberta",
@@ -491,7 +489,7 @@ Init <- function(sim) {
   if (!suppliedElsewhere("studyArea", sim)) {
     ## NOTE: studyArea and studyAreaLarge are the same [buffered] area
     sim$studyArea <- st_buffer(sim$studyArea, P(sim)$bufferDist)
-  }
+  } # Second call of 'studyArea'
 
   if (!suppliedElsewhere("studyAreaLarge", sim)) {
       sim$studyAreaLarge <- sim$studyArea
@@ -521,7 +519,13 @@ Init <- function(sim) {
 
   if (!suppliedElsewhere("rasterToMatchReporting", sim)) {
     sim$rasterToMatchReporting <- Cache(maskInputs, sim$rasterToMatch, studyArea = sim$studyAreaReporting)
-    writeRaster(sim$rasterToMatchReporting,  file.path(dPath, paste0(P(sim)$studyAreaName, "_rtmr.tif")),
+    if (length(P(sim)$studyAreaName)>1){
+      nameRTMR <- paste(P(sim)$studyAreaName, collapse = "_")
+    } else {
+      nameRTMR <- P(sim)$studyAreaName
+    }
+    writeRaster(sim$rasterToMatchReporting,  
+                file.path(dPath, paste0(nameRTMR, "_rtmr.tif")),
                 datatype = "INT1U", overwrite = TRUE)
   }
 
