@@ -17,7 +17,8 @@ defineModule(sim, list(
   citation = list("citation.bib"),
   documentation = deparse(list("README.md", "canClimateData.Rmd")),
   reqdPkgs = list("archive", "digest", "geodata", "googledrive", "purrr", "sf", "spatialEco", "terra",
-                  "PredictiveEcology/climateData@development (>= 1.0.1)",
+                  "R.utils",
+                  "PredictiveEcology/climateData@stopMessageHelp (>= 1.0.4)",
                   "PredictiveEcology/fireSenseUtils@development (>= 0.0.5.9046)",
                   "PredictiveEcology/LandR@development (>= 1.1.0.9064)",
                   "PredictiveEcology/reproducible@development (>= 2.0.8.9001)",
@@ -193,7 +194,8 @@ Init <- function(sim) {
   })
   dem <- SpaDES.tools::mergeRaster(dems)
 
-  ## HISTORIC CLIMATE DATA
+  ######################     HISTORIC   CLIMATE   DATA      ######################
+  
   digestSA_RTM <- CacheDigest(list(sim$studyArea, sim$rasterToMatch))$outputHash
 
   historicalClimatePath <- file.path(dPath, "climate", "historic") |>
@@ -220,6 +222,27 @@ Init <- function(sim) {
       }
       out <- preProcess(url = histURL, archive = historicalClimateArchive,
                         destinationPath = historicalClimatePath)
+      # TM ~ I added the catch below to avoid stalling. Ideally, one day we will solve the 
+      # gdrive downloading problem altogether. 
+      # message(paste0("The file '", basename(historicalClimateArchive), "' doesn't exist in ", 
+      #                dirname(historicalClimateArchive), ". Trying to download it..."))
+      # tryCatch({R.utils::withTimeout({expr = out <- preProcess(url = historicalClimateURL[[prov]], 
+      #                                                          archive = historicalClimateArchive,
+      #                                                          destinationPath = historicalClimatePath, 
+      #                                                          overwrite = TRUE)},
+      #                                timeout = 600, onTimeout = "error")}, 
+      #          error = function(e){
+      #            unlink(historicalClimateArchive)
+      #            stop(paste0("The download of the file '", basename(historicalClimateArchive), 
+      #                        "' via googledrive was unsuccessful, most likely due to its size. ",
+      #                        "This issue is a known challenge when dealing with larger files and",
+      #                        " an unstable internet connection. The module will not make further attempts to ",
+      #                        "download it. Please download it manually from ",
+      #                        paste0("https://drive.google.com/file/d/", historicalClimateURL[[prov]]), 
+      #                        ", save it at ", historicalClimateArchive,
+      #                        " and make sure to unzip it keeping the file structure and re-run the module."))
+      #          }
+      # )
       extractedFiles <- out$checkSums$actualFile
       baseDir <- strsplit(extractedFiles, split = "\\\\|/") |>
         vapply(function(x) x[[1]], FUN.VALUE = character(1)) |> # pull out first element i.e,. the leftmost directory
@@ -233,6 +256,7 @@ Init <- function(sim) {
 
     ## all downstream stuff from this one archive file should have same Cache assessment
     ##   do it once here and pass to each subsequent through .cacheExtra
+    message(paste0("The file '", historicalClimateArchive, "' exists. Starting MDC creation."))
     digestFiles <- digest::digest(file = historicalClimateArchive, algo = "xxhash64")
     digestYears <- CacheDigest(list(P(sim)$historicalFireYears))$outputHash
 
@@ -253,7 +277,9 @@ Init <- function(sim) {
         quick = "writeTo",
         .cacheExtra = c(digestFiles, digestSA_RTM, digestYears),
         userTags = c("historicMDC", cacheTags))
-
+    
+    message("MDC has been created for years: ", paste(na.omit(as.numeric(unlist(strsplit(x = names(historicalMDC),
+                                                                split = "mdc")))), collapse = ", "))
     return(historicalMDC)
   })
   historicalMDC <- SpaDES.tools::mergeRaster(histMDCs)
@@ -263,47 +289,183 @@ Init <- function(sim) {
   ## WARNING: names(historicalMDC) <- paste0('year', P(sim)$historicalFireYears) # Bad
   ##          |-> allows for index mismatching
   historicalMDC <- updateStackYearNames(historicalMDC, Par$historicalFireYears)
-
+  
   compareGeom(historicalMDC, sim$rasterToMatch)
 
   sim$historicalClimateRasters <- list("MDC" = historicalMDC)
-
-  ## FUTURE CLIMATE DATA
+  
+  ######################     FUTURE   CLIMATE   DATA      ######################
+  
+  message("Historical MDC's list created. Starting with future climate data...")
   projectedClimatePath <- file.path(dPath, "climate", "future",
                                     paste0(P(sim)$climateGCM, "_ssp", P(sim)$climateSSP)) |>
     checkPath(create = TRUE)
-
   projMDCs <- lapply(mod$studyAreaNameShort, function(prov) {
     cacheTags <- c(prov, currentModule(sim))
-    projectedClimateArchive <- file.path(dirname(projectedClimatePath),
+    projectedClimateArchive <- file.path(projectedClimatePath,
                                          paste0(mod$studyAreaNameLong[[prov]], "_",
                                                 P(sim)$climateGCM, "_ssp",
                                                 P(sim)$climateSSP, ".zip"))
-    projectedMDCfile <- file.path(dirname(projectedClimatePath),
+    projectedMDCfile <- file.path(projectedClimatePath,
                                   paste0("MDC_future_", P(sim)$climateGCM,
                                          "_ssp", P(sim)$climateSSP, "_",
                                          paste(P(sim)$studyAreaName, collapse = "_"), ".tif"))
 
     ## need to download and extract w/o prepInputs to preserve folder structure!
     if (!file.exists(projectedClimateArchive)) {
-      googledrive::drive_download(file = as_id(projectedClimateUrl[[prov]]), path = projectedClimateArchive)
-      archive::archive_extract(projectedClimateArchive, projectedClimatePath)
-    }
+      message(paste0("The file '", basename(projectedClimateArchive), "' doesn't exist in ", 
+                     dirname(projectedClimateArchive), ". Trying to download it..."))
+      # Here we try to download the file normally with googledrive but we put a stop if the download 
+      # lasts more than 10min
+      # If the download fails, we try to download the file in parts # TM [26OCT23]: I tried this but
+      #                                                             failed at getting the files with 
+      #                                                             the correct number of bytes and 
+      #                                                             to stitch it back together. The 
+      #                                                             code is, however, here (commented 
+      #                                                             out) if anyone wants to give it 
+      #                                                             a try.
+      out <- preProcess(url = projectedClimateURL[[prov]], archive = projectedClimateArchive,
+                        destinationPath = projectedClimatePath)
+      # downloadFailed <- 
+        # tryCatch({R.utils::withTimeout(expr = {out <- preProcess(url = projectedClimateURL[[prov]], 
+        #                                                         archive = projectedClimateArchive,
+        #                                                         destinationPath = projectedClimatePath, 
+        #                                                         overwrite = TRUE)},
+        #                    timeout = 600, onTimeout = "error")}, 
+        #        error = function(e){
+        #          # unlink(dirname(projectedClimateArchive)) # Need to think about how/if needed to delete the directory created
+        #          unlink(projectedClimateArchive)
+        #          # Stop added as a potential solution to add the file manually. Would be good to manage
+        #          # to get this working to download file parts...
+        #          stop(paste0("The download of the file '", basename(projectedClimateArchive), 
+        #                                     "' via googledrive was unsuccessful, most likely due to its size. ",
+        #                                     "This issue is a known challenge when dealing with larger files and",
+        #                                     " an unstable internet connection. The module will not make further attempts to ",
+        #                                     "download it. Please download it manually from ",
+        #                      paste0("https://drive.google.com/file/d/", projectedClimateUrl[[prov]]), 
+        #                      ", save it at ", projectedClimatePath, " as ", basename(projectedClimateArchive),
+        #                      " and make sure to unzip it keeping the file structure and re-run the module."))
+        #          # message(paste0("The download of the file '", basename(projectedClimateArchive), 
+        #          #                "' via googledrive was unsuccessful, most likely due to its size. ",
+        #          #                "This issue is a known challenge when dealing with larger files and",
+        #          #                " an unstable internet connection. The module will now attempt to ",
+        #          #                "download it in smaller segments...")) # Didn't work...
+        #          # return(TRUE)
+        #        }
+        #          )
+      # if (downloadFailed) {
+      #   # Define the maximum file size.
+      #   message("Getting file size...")
+      #   urlToDownload <- paste0("https://drive.google.com/file/d/",
+      #                           projectedClimateUrl[[prov]])
+      #   fileSize <- as.numeric(drive_reveal(as_id(projectedClimateUrl[[prov]]),
+      #                           what = "size")$size) # in bytes already
+      #   increment <- 5e+7 # Subset in 50mb parts. This *should* be enough.
+      #                     #TODO give the user the power to change it, make it an argument.
+      #   firstByte <- 0
+      #   finalByte <- firstByte + increment
+      #   message(paste0("Total file size: ", format(fileSize/1048576, digits = 2),
+      #                  " Mb. The file will be tiled in approximately ",
+      #                  as.numeric(format(fileSize/increment, digits = 1))+1, " parts..."))
+      #   while (finalByte < fileSize){ # When first Byte > fileInf, stop and try to stitch it together
+      #     byteRange <- paste0("bytes=", firstByte, "-", finalByte)
+      #     tmpFileName <- file.path(checkPath(file.path(tempdir(), "fileparts"),
+      #                              create = TRUE),
+      #                              paste0("partialFile_", firstByte, "_", finalByte))
+      #     if (!file.exists(tmpFileName)){
+      #       # Send an HTTP GET request with the byte range header
+      #       message(paste0(basename(tmpFileName), " doesn't exist yet. Downloading..."))
+      #       response <- httr::GET(url = urlToDownload,
+      #                             httr::add_headers(Range = byteRange),
+      #                             httr::verbose(),
+      #                             httr::write_disk(tmpFileName),
+      #                             httr::progress(),
+      #                             drive_token())
+      #       if (all(response$status_code == 200, file.exists(tmpFileName))){
+      #         message(basename(tmpFileName), " was sucessfully created. Downloading next file.")
+      #       } else {
+      #         stop(paste0("Something went wrong with the download request. ",
+      #                     "Make sure you have access to the file and try again.",
+      #                     "Alternatively, download the file manually from ",
+      #                     urlToDownload, ", save it at ", projectedClimateArchive,
+      #                     " and re-run the module."))
+      #       }
+      #     } else {
+      #       message(paste0(basename(tmpFileName), " already exists, downloading next file."))
+      #     }
+      #     firstByte <- finalByte + 1 
+      #     finalByte <- firstByte + increment
+      #   }
+      #   # Create a vector of file names for the downloaded segments
+      #   segmentFiles <- list.files(file.path(tempdir(), "fileparts"), 
+      #                              full.names = TRUE)
+      # 
+      #   # Open the target file in binary write mode
+      #   targetFile <- file(file.path(projectedClimatePath,
+      #                                basename(projectedClimateArchive)), "wb") 
+      #   # Iterate through the segment files and combine them
+      #   for (i in segmentFiles) {
+      #     segmentContent <- readBin(con = i, what = "raw", 
+      #                                n = file.info(i)$size)
+      #     writeBin(segmentContent, targetFile)
+      #   }
+      #   
+      #   # Close the target file connection
+      #   close(targetFile)
+      #   
+      #   # Optionally, remove the individual segment files
+      #   unlink(segmentFiles)
+      # }
+      
+      # If the download works, extract!
+      extractedFiles <- out$checkSums$actualFile
+      baseDir <- strsplit(extractedFiles, split = "\\\\|/") |>
+        vapply(function(x) x[[1]], FUN.VALUE = character(1)) |> # pull out first element i.e,. the leftmost directory
+        unique() |>
+        na.omit() |>
+        grep(pattern = "zip", invert = TRUE, value = TRUE) |> # get rid of zip
+        makeAbsolute(absoluteBase = projectedClimatePath)           # absolutePath
+      }
     digestFiles <- digest::digest(file = projectedClimateArchive, algo = "xxhash64")
     digestYears <- CacheDigest(list(P(sim)$projectedFireYears))$outputHash
-
+    message(paste0("The file '", projectedClimateArchive, "' exists. Starting projected MDC creation."))
+  
+    ######################     MDC      ######################  
+    
+    # Make sure the zip file
+    # projectedMDC <- {
+    #   makeMDC(inputPath = file.path(projectedClimatePath, mod$studyAreaNameLong[[prov]]),
+    #           years = P(sim)$projectedFireYears) |>
+    #     postProcessTo(to = sim$rasterToMatch,
+    #                   maskTo = sim$studyArea,
+    #                   writeTo = projectedMDCfile,
+    #                   quick = "writeTo",
+    #                   datatype = "INT2U")} |>
+    #   Cache(omitArgs = c("from", "to", "maskTo"),
+    #         userTags = c("projectedMDC", cacheTags),
+    #         .functionName = "makeMDC_forProjectedMDC",
+    #         .cacheExtra = c(digestFiles, digestSA_RTM, digestYears))
+    baseDir <- checkPath(file.path(projectedClimatePath,
+                                   mod$studyAreaNameLong[[prov]]), create = TRUE)
     projectedMDC <- {
-      makeMDC(inputPath = file.path(projectedClimatePath, mod$studyAreaNameLong[[prov]]),
-              years = P(sim)$projectedFireYears) |>
-        postProcessTo(to = sim$rasterToMatch,
-                      maskTo = sim$studyArea,
-                      writeTo = projectedMDCfile,
-                      quick = "writeTo",
-                      datatype = "INT2U")} |>
-      Cache(omitArgs = c("from", "to", "maskTo", "writeTo"),
-            userTags = c("projectedMDC", cacheTags),
-            .functionName = "makeMDC_forProjectedMDC",
-            .cacheExtra = c(digestFiles, digestSA_RTM, digestYears))
+      makeMDC(
+        inputPath = baseDir,
+        years = P(sim)$projectedFireYears) |>
+        postProcessTo(#from = historicalMDC,
+          to = sim$rasterToMatch,
+          maskTo = sim$studyArea,
+          writeTo = projectedMDCfile,
+          quick = "writeTo",
+          datatype = "INT2U")} |>
+      Cache(
+        omitArgs = c("from", "to", "maskTo", "writeTo", "to"),
+        .functionName = "makeMDC_forProjectedMDC",
+        .cacheExtra = c(digestFiles, digestSA_RTM, digestYears),
+        userTags = c("projectedMDC", cacheTags))
+    
+    message("MDC has been created for years: ", paste(na.omit(as.numeric(unlist(strsplit(x = names(projectedMDC),
+                                                                                         split = "mdc")))), collapse = ", "))
+    return(projectedMDC)
   }) ## TODO: why is Cache sometimes returning historical mdc ??????? # Oct 18, 2023 -- seems OK now (Eliot)
   projectedMDC <- SpaDES.tools::mergeRaster(projMDCs)
 
@@ -320,6 +482,8 @@ Init <- function(sim) {
   ## 4) run makeLandRCS_projectedCMIandATA, with normal MAT as an input arg. It returns a list of raster stacks (projected ATA and CMI). Assign both to sim
   ## 5) Profit
 
+  ######################     NORMALS      ######################
+  
   norms <- lapply(mod$studyAreaNameShort, function(prov) {
     cacheTags <- c(prov, currentModule(sim))
     normalsClimateUrl <- dt[studyArea == prov & type == "hist_normals", GID]
@@ -328,6 +492,9 @@ Init <- function(sim) {
 
     if (!file.exists(normalsClimateArchive)) {
       ## need to download and extract w/o prepInputs to preserve folder structure!
+      ## TODO: Need to implement the same failproof approach from above
+      ## Here it is NOT getting stuck in the download below... BUT might be the case for someone. So 
+      ## we should preemptively deal with this. I suggest we add this structure into preProcess() 
       googledrive::drive_download(file = as_id(normalsClimateUrl), path = normalsClimateArchive)
       archive::archive_extract(normalsClimateArchive, normalsClimatePath)
     }
@@ -351,29 +518,60 @@ Init <- function(sim) {
                                  GCM == P(sim)$climateGCM &
                                  SSP == P(sim)$climateSSP &
                                  type == "proj_annual", GID]
-    projAnnualClimatePath <- file.path(projectedClimatePath, "annual") |>
+    projAnnualClimatePath <- file.path(projectedClimatePath, "annual", mod$studyAreaNameLong[[prov]]) |>
       checkPath(create = TRUE)
     projAnnualClimateArchive <- file.path(dirname(projAnnualClimatePath),
                                           paste0(mod$studyAreaNameLong[[prov]], "_",
                                                  P(sim)$climateGCM, "_ssp",
                                                  P(sim)$climateSSP, "_annual.zip"))
-
-    if (!file.exists(projAnnualClimateArchive)) {
-      ## need to download and extract w/o prepInputs to preserve folder structure!
-      googledrive::drive_download(file = as_id(projAnnualClimateUrl), path = projAnnualClimateArchive)
-      archive::archive_extract(projAnnualClimateArchive, projAnnualClimatePath)
-    }
+    out <- preProcess(url = projAnnualClimateUrl, archive = projAnnualClimateArchive,
+                      destinationPath = projAnnualClimatePath)
+    # if (!file.exists(projAnnualClimateArchive)) {
+    #   ## need to download and extract w/o prepInputs to preserve folder structure!
+    #   ##    # It is getting stuck again in the download below...
+    #   # googledrive::drive_download(file = googledrive::as_id(projAnnualClimateUrl), path = projAnnualClimateArchive)
+    #   # archive::archive_extract(projAnnualClimateArchive, projAnnualClimatePath)
+    #   message(paste0("The file '", basename(projAnnualClimateArchive), "' doesn't exist in ", 
+    #                  dirname(projAnnualClimateArchive), ". Trying to download it..."))
+    #   tryCatch({R.utils::withTimeout({expr = out <- preProcess(url = projAnnualClimateUrl, 
+    #                                                            archive = projAnnualClimateArchive,
+    #                                                            destinationPath = projAnnualClimatePath, 
+    #                                                            overwrite = TRUE)},
+    #                                  timeout = 600, onTimeout = "error")}, 
+    #            error = function(e){
+    #              unlink(projAnnualClimateArchive)
+    #              stop(paste0("The download of the file '", basename(projAnnualClimateArchive), 
+    #                          "' via googledrive was unsuccessful, most likely due to its size. ",
+    #                          "This issue is a known challenge when dealing with larger files and",
+    #                          " an unstable internet connection. The module will not make further attempts to ",
+    #                          "download it. Please download it manually from ",
+    #                          paste0("https://drive.google.com/file/d/", projAnnualClimateUrl), 
+    #                          ", save it at ", projAnnualClimateArchive,
+    #                          " and make sure to unzip it keeping the file structure and re-run the module."))
+    #            }
+    #   )
+    #   extractedFiles <- out$checkSums$actualFile
+    #   baseDir <- strsplit(extractedFiles, split = "\\\\|/") |>
+    #     vapply(function(x) x[[1]], FUN.VALUE = character(1)) |> # pull out first element i.e,. the leftmost directory
+    #     unique() |>
+    #     na.omit() |>
+    #     grep(pattern = "zip", invert = TRUE, value = TRUE) |> # get rid of zip
+    #     makeAbsolute(absoluteBase = projAnnualClimatePath)           # absolutePath
+    # 
+    #   message("Projected annual climate rasters have been downloaded and unzipped.")
+    #   
+    #   }
 
     Cache(makeLandRCS_projectedCMIandATA,
           normalMAT = normals[["MATnormal"]],
-          pathToFutureRasters = file.path(projAnnualClimatePath, mod$studyAreaNameLong[[prov]]),
+          pathToFutureRasters = projAnnualClimatePath,
           years = P(sim)$projectedFireYears,
           maskTo = sim$studyArea,
           useCache = TRUE,
-          userTags = c("projectedCMIandATA", cacheTags))
+          userTags = c("projectedCMIandATA", cacheTags)) 
   }) |>
     purrr::transpose()
-
+  
   sim$ATAstack <- Cache(SpaDES.tools::mergeRaster, projCMIATA[["projectedATA"]])
   sim$CMIstack <- Cache(SpaDES.tools::mergeRaster, projCMIATA[["projectedCMI"]])
 
