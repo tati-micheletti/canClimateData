@@ -213,7 +213,12 @@ Init <- function(sim) {
       #   extracts to a folder called "Northwest Territories and Nunavut/",
       #   but the sequence with googledrive::drive_download thinks it will be Northwest Territories
       # preProcess solves this
-      out <- preProcess(url = historicalClimateURL[[prov]], archive = historicalClimateArchive,
+      if (!grepl(pattern = "http", x = historicalClimateURL[[prov]])){
+        histURL <- paste0("https://drive.google.com/file/d/", historicalClimateURL[[prov]])
+      } else {
+        histURL <- historicalClimateURL[[prov]]
+      }
+      out <- preProcess(url = histURL, archive = historicalClimateArchive,
                         destinationPath = historicalClimatePath)
       extractedFiles <- out$checkSums$actualFile
       baseDir <- strsplit(extractedFiles, split = "\\\\|/") |>
@@ -231,24 +236,6 @@ Init <- function(sim) {
     digestFiles <- digest::digest(file = historicalClimateArchive, algo = "xxhash64")
     digestYears <- CacheDigest(list(P(sim)$historicalFireYears))$outputHash
 
-    # historicalMDC <- Cache(makeMDC(
-    #                        inputPath = checkPath(file.path(historicalClimatePath,
-    #                                                        mod$studyAreaNameLong[[prov]]), create = TRUE),
-    #                        years = P(sim)$historicalFireYears),
-    #                        .cacheExtra = c(digestFiles, digestYears),
-    #                        omitArgs = c("inputPath"),
-    #                        userTags = c("historicMDC", cacheTags))
-    #
-    # historicalMDC <- Cache(postProcessTo,
-    #                        from = historicalMDC,
-    #                        to = sim$rasterToMatch,
-    #                        maskTo = sim$studyArea,
-    #                        writeTo = historicalMDCfile,
-    #                        quick = "writeTo",
-    #                        datatype = "INT2U",
-    #                        userTags = c("historicMDC", cacheTags),
-    #                        .cacheExtra = c(digestFiles, digestSA_RTM, digestYears))
-
     # Do in one step -- using .cacheExtra -- can't use omitArgs for function in first function in { ... }
     historicalMDC <- {
       makeMDC(
@@ -258,11 +245,12 @@ Init <- function(sim) {
           to = sim$rasterToMatch,
           maskTo = sim$studyArea,
           writeTo = historicalMDCfile,
-          quick = "writeTo",
+          method = "near",
           datatype = "INT2U")} |>
       Cache(
         omitArgs = c("from", "to", "maskTo", "writeTo", "to"),
         .functionName = "makeMDC_forHistoricalMDC",
+        quick = "writeTo",
         .cacheExtra = c(digestFiles, digestSA_RTM, digestYears),
         userTags = c("historicMDC", cacheTags))
 
@@ -312,7 +300,7 @@ Init <- function(sim) {
                       writeTo = projectedMDCfile,
                       quick = "writeTo",
                       datatype = "INT2U")} |>
-      Cache(omitArgs = c("from", "to", "maskTo"),
+      Cache(omitArgs = c("from", "to", "maskTo", "writeTo"),
             userTags = c("projectedMDC", cacheTags),
             .functionName = "makeMDC_forProjectedMDC",
             .cacheExtra = c(digestFiles, digestSA_RTM, digestYears))
@@ -347,10 +335,13 @@ Init <- function(sim) {
     Cache(
       makeLandRCS_1950_2010_normals,
       pathToNormalRasters = file.path(normalsClimatePath, mod$studyAreaNameLong[[prov]]),
-      rasterToMatch = sim$rasterToMatch,
+      to = sim$rasterToMatch,
+      maskTo = sim$studyArea,
+      method = "near",
       userTags = c("normals", cacheTags)
     )
   })
+
   normals <- SpaDES.tools::mergeRaster(norms)
   sim$CMInormal <- normals[["CMInormal"]]
 
@@ -377,6 +368,7 @@ Init <- function(sim) {
           normalMAT = normals[["MATnormal"]],
           pathToFutureRasters = file.path(projAnnualClimatePath, mod$studyAreaNameLong[[prov]]),
           years = P(sim)$projectedFireYears,
+          maskTo = sim$studyArea,
           useCache = TRUE,
           userTags = c("projectedCMIandATA", cacheTags))
   }) |>
@@ -396,7 +388,7 @@ Init <- function(sim) {
 }
 
 .inputObjects <- function(sim) {
-  cacheTags <- c(currentModule(sim), "function:.inputObjects")
+  cacheTags <- c(currentModule(sim), "OtherFunction:.inputObjects")
   dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
   message(currentModule(sim), ": using dataPath '", dPath, "'.")
 
