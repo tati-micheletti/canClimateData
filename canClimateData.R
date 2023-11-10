@@ -435,7 +435,7 @@ Init <- function(sim) {
   }
 
   if (!suppliedElsewhere("rasterToMatchReporting", sim)) {
-    sim$rasterToMatchReporting <- Cache(maskInputs, sim$rasterToMatch, maskTo = sim$studyAreaReporting)
+    sim$rasterToMatchReporting <- Cache(maskTo, sim$rasterToMatch, maskTo = sim$studyAreaReporting)
     writeRaster(sim$rasterToMatchReporting,  file.path(dPath, paste0(P(sim)$studyAreaName, "_rtmr.tif")),
                 datatype = "INT1U", overwrite = TRUE)
   }
