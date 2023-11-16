@@ -16,7 +16,8 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = deparse(list("README.md", "canClimateData.Rmd")),
-  reqdPkgs = list("archive", "digest", "geodata", "googledrive", "purrr", "sf", "spatialEco", "terra",
+  reqdPkgs = list("archive", "digest", "geodata", "googledrive", "purrr",
+                  "R.utils", "sf", "spatialEco", "terra",
                   "PredictiveEcology/climateData@development (>= 1.0.1)",
                   "PredictiveEcology/fireSenseUtils@development (>= 0.0.5.9046)",
                   "PredictiveEcology/LandR@development (>= 1.1.0.9064)",
@@ -121,31 +122,38 @@ Init <- function(sim) {
 
   fn1 <- function(x) {
     x <- readRDS(x)
-    x <- st_as_sf(x)
-    st_transform(x, mod$targetCRS)
+    if (is(x, "PackedSpatVector")) {
+      x <- terra::unwrap(x)
+    }
+    st_as_sf(x) |>
+     st_transform(mod$targetCRS)
   }
 
-  canProvs <- Cache(prepInputs,
-                    "GADM",
-                    fun = fn1,
-                    dlFun = "geodata::gadm",
-                    country = "CAN", level = 1, path = dPath,
-                    targetFile = "gadm36_CAN_1_sp.rds", ## TODO: will change as GADM data update
-                    destinationPath = dPath,
-                    useCache = P(sim)$.useCache) |>
+  canProvs <- Cache(
+    prepInputs,
+    "GADM",
+    fun = fn1,
+    dlFun = "geodata::gadm",
+    country = "CAN", level = 1, path = dPath, version = "3.6",
+    targetFile = "gadm36_CAN_1_sp.rds", ## TODO: update with 'version' above
+    destinationPath = dPath,
+    useCache = P(sim)$.useCache
+  ) |>
     sf::st_as_sf() |>
     sf::st_transform(mod$targetCRS)
 
-  whereAmI <- reproducible::postProcessTo(canProvs, to = sim$studyArea)$NAME_1
+  whereAmI <- reproducible::postProcessTo(canProvs, to = sim$studyArea)$NAME_1 |>
+    gsub("Nunavut", "Northwest Territories", x = _) |> ## NT+NU together
+    unique()
 
   provsWithData <- data.frame(
-    shortName = c("AB", "BC", "MB", "NT", "NU", "ON", "QC", "SK", "YT"),
+    shortName = c("AB", "BC", "MB", "NT", "ON", "QC", "SK", "YT"),
     longName = c("Alberta", "British Columbia", "Manitoba",
-                 "Northwest Territories", "Nunavut",
+                 "Northwest Territories",
                  "Ontario", "Québec", "Saskatchewan", "Yukon"),
     dirName = c("Alberta", "British Columbia", "Manitoba",
-                "Northwest Territories & Nunavut", "Northwest Territories & Nunavut",
-                "Ontario", "Quebec", "Saskatchewan", "Yukon") ## no accents; NT+NU together
+                "Northwest Territories & Nunavut",
+                "Ontario", "Quebec", "Saskatchewan", "Yukon") ## no accents
   )
 
   stopifnot(all(whereAmI %in% provsWithData$longName))
@@ -182,7 +190,6 @@ Init <- function(sim) {
                    BC = "https://drive.google.com/file/d/1DaAYFr0z38qmbZcz452QPMP_fzwUIqLD/",
                    MB = "https://drive.google.com/file/d/1X7b2CE6QyCvik3UG9pUj6zc4b5UYZi8w/",
                    NT = "https://drive.google.com/file/d/13n8LjQJihy9kd3SniS91EuXunowbWOBa/", ## with NU
-                   NU = "https://drive.google.com/file/d/13n8LjQJihy9kd3SniS91EuXunowbWOBa/", ## with NT
                    ON = "https://drive.google.com/file/d/1NP2toth6-c5g7dzwLh34pqZ0rdypTauS/",
                    QC = "https://drive.google.com/file/d/1xShpp_irB2AH1ak9Z1i4wXZJuzncpAbc/",
                    SK = "https://drive.google.com/file/d/1CooPdqc3SlVVU7y_BaPfZD0OXt42fjBC/",
@@ -221,8 +228,26 @@ Init <- function(sim) {
 
     ## need to download and extract w/o prepInputs to preserve folder structure!
     if (!file.exists(historicalClimateArchive)) {
-      googledrive::drive_download(file = as_id(historicalClimateURL[[prov]]), path = historicalClimateArchive)
+      tryCatch({
+        R.utils::withTimeout({
+          googledrive::drive_download(file = as_id(historicalClimateURL[[prov]]), path = historicalClimateArchive)
+        }, timeout = 1800, onTimeout = "error")
+      },
+      error = function(e) {
+        unlink(historicalClimateArchive)
+        stop(paste0(
+          "The download of the file '", basename(historicalClimateArchive), "' was unsuccessful, ",
+          "most likely due to its size and an unstable internet connection.",
+          "Please download it manually from ",
+          paste0("https://drive.google.com/file/d/", historicalClimateURL[[prov]]),
+          ", save it as ", historicalClimateArchive, "."
+        ))
+      })
       archive::archive_extract(historicalClimateArchive, historicalClimatePath)
+    } else {
+      if (!dir.exists(file.path(dirname(historicalClimateArchive), mod$studyAreaNameDir[[prov]]))) {
+        archive::archive_extract(historicalClimateArchive, historicalClimatePath)
+      }
     }
 
     ## all downstream stuff from this one archive file should have same Cache assessment
@@ -280,8 +305,26 @@ Init <- function(sim) {
 
     ## need to download and extract w/o prepInputs to preserve folder structure!
     if (!file.exists(projectedClimateArchive)) {
-      googledrive::drive_download(file = as_id(projectedClimateUrl[[prov]]), path = projectedClimateArchive)
+      tryCatch({
+        R.utils::withTimeout({
+          googledrive::drive_download(file = as_id(projectedClimateUrl[[prov]]), path = projectedClimateArchive)
+        }, timeout = 1800,  onTimeout = "error")
+      },
+      error = function(e) {
+        unlink(projectedClimateArchive)
+        stop(paste0(
+          "The download of the file '", basename(projectedClimateArchive), "' was unsuccessful, ",
+          "most likely due to its size and an unstable internet connection.",
+          "Please download it manually from ",
+          paste0("https://drive.google.com/file/d/", projectedClimateUrl[[prov]]),
+          ", save it as ", projectedClimateArchive, "."
+        ))
+      })
       archive::archive_extract(projectedClimateArchive, projectedClimatePath)
+    } else {
+      if (!dir.exists(file.path(dirname(projectedClimateArchive), mod$studyAreaNameDir[[prov]]))) {
+        archive::archive_extract(projectedClimateArchive, projectedClimatePath)
+      }
     }
     digestFiles <- digest::digest(file = projectedClimateArchive, algo = "xxhash64")
     digestYears <- CacheDigest(list(P(sim)$projectedFireYears))$outputHash
@@ -325,8 +368,26 @@ Init <- function(sim) {
 
     if (!file.exists(normalsClimateArchive)) {
       ## need to download and extract w/o prepInputs to preserve folder structure!
-      googledrive::drive_download(file = as_id(normalsClimateUrl), path = normalsClimateArchive)
+      tryCatch({
+        R.utils::withTimeout({
+          googledrive::drive_download(file = as_id(normalsClimateUrl), path = normalsClimateArchive)
+        }, timeout = 1800, onTimeout = "error")
+      },
+      error = function(e) {
+        unlink(normalsClimateArchive)
+        stop(paste0(
+          "The download of the file '", basename(normalsClimateArchive), "' was unsuccessful, ",
+          "most likely due to its size and an unstable internet connection.",
+          "Please download it manually from ",
+          paste0("https://drive.google.com/file/d/", normalsClimateUrl),
+          ", save it as ", normalsClimateArchive, "."
+        ))
+      })
       archive::archive_extract(normalsClimateArchive, normalsClimatePath)
+    } else {
+      if (!dir.exists(file.path(dirname(normalsClimateArchive), mod$studyAreaNameDir[[prov]]))) {
+        archive::archive_extract(normalsClimateArchive, normalsClimatePath)
+      }
     }
 
     Cache(
@@ -410,6 +471,11 @@ Init <- function(sim) {
 
   if (!suppliedElsewhere("studyAreaLarge", sim)) {
     sim$studyAreaLarge <- sim$studyArea
+  }
+
+  if (is.na(P(sim)$studyAreaName)) {
+    ## use unique hash as study area name
+    P(sim, "studyAreaName") <- studyAreaName(sim$studyArea)
   }
 
   if (!suppliedElsewhere("rasterToMatch", sim)) {
