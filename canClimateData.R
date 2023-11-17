@@ -245,7 +245,7 @@ Init <- function(sim) {
       })
       archive::archive_extract(historicalClimateArchive, historicalClimatePath)
     } else {
-      if (!dir.exists(file.path(dirname(historicalClimateArchive), mod$studyAreaNameDir[[prov]]))) {
+      if (!dir.exists(tools::file_path_sans_ext(historicalClimateArchive))) {
         archive::archive_extract(historicalClimateArchive, historicalClimatePath)
       }
     }
@@ -322,7 +322,7 @@ Init <- function(sim) {
       })
       archive::archive_extract(projectedClimateArchive, projectedClimatePath)
     } else {
-      if (!dir.exists(file.path(dirname(projectedClimateArchive), mod$studyAreaNameDir[[prov]]))) {
+      if (!dir.exists(tools::file_path_sans_ext(projectedClimateArchive))) {
         archive::archive_extract(projectedClimateArchive, projectedClimatePath)
       }
     }
@@ -385,7 +385,7 @@ Init <- function(sim) {
       })
       archive::archive_extract(normalsClimateArchive, normalsClimatePath)
     } else {
-      if (!dir.exists(file.path(dirname(normalsClimateArchive), mod$studyAreaNameDir[[prov]]))) {
+      if (!dir.exists(file.path(normalsClimatePath, paste0(mod$studyAreaNameDir[[prov]])))) {
         archive::archive_extract(normalsClimateArchive, normalsClimatePath)
       }
     }
