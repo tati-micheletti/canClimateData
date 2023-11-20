@@ -323,7 +323,8 @@ Init <- function(sim) {
       archive::archive_extract(projectedClimateArchive, projectedClimatePath)
     } else {
       if (!dir.exists(file.path(dirname(projectedClimatePath),
-                                paste0(mod$studyAreaNameDir[[prov]])))) {
+                                paste0(P(sim)$climateGCM, "_ssp",
+                                       P(sim)$climateSSP, mod$studyAreaNameDir[[prov]])))) {
         archive::archive_extract(projectedClimateArchive, projectedClimatePath)
       }
     }
