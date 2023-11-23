@@ -232,8 +232,7 @@ Init <- function(sim) {
         R.utils::withTimeout({
           googledrive::drive_download(file = as_id(historicalClimateURL[[prov]]), path = historicalClimateArchive)
         }, timeout = 1800, onTimeout = "error")
-      },
-      error = function(e) {
+      }, error = function(e) {
         unlink(historicalClimateArchive)
         stop(paste0(
           "The download of the file '", basename(historicalClimateArchive), "' was unsuccessful, ",
@@ -243,11 +242,16 @@ Init <- function(sim) {
           ", save it as ", historicalClimateArchive, "."
         ))
       })
-      archive::archive_extract(historicalClimateArchive, historicalClimatePath)
-    } else {
-      if (!dir.exists(tools::file_path_sans_ext(historicalClimateArchive))) {
+      tryCatch({
         archive::archive_extract(historicalClimateArchive, historicalClimatePath)
-      }
+      }, error = function(e) {
+        unlink(file.path(historicalClimatePath, mod$studyAreaNameDir[prov]))
+        stop(paste0(
+          "The extraction of the file '", historicalClimateArchive, "' was unsuccessful, ",
+          "most likely due to its size. Please extract the file manually  to ",
+          historicalClimatePath, " (i.e., '7z x ", historicalClimateArchive, 
+          " -o", historicalClimatePath, "'."))
+      })
     }
 
     ## all downstream stuff from this one archive file should have same Cache assessment
@@ -291,7 +295,6 @@ Init <- function(sim) {
   projectedClimatePath <- file.path(dPath, "climate", "future",
                                     paste0(P(sim)$climateGCM, "_ssp", P(sim)$climateSSP)) |>
     checkPath(create = TRUE)
-
   projMDCs <- lapply(mod$studyAreaNameShort, function(prov) {
     cacheTags <- c(prov, currentModule(sim))
     projectedClimateArchive <- file.path(dirname(projectedClimatePath),
@@ -309,8 +312,7 @@ Init <- function(sim) {
         R.utils::withTimeout({
           googledrive::drive_download(file = as_id(projectedClimateUrl[[prov]]), path = projectedClimateArchive)
         }, timeout = 1800,  onTimeout = "error")
-      },
-      error = function(e) {
+      }, error = function(e) {
         unlink(projectedClimateArchive)
         stop(paste0(
           "The download of the file '", basename(projectedClimateArchive), "' was unsuccessful, ",
@@ -320,13 +322,16 @@ Init <- function(sim) {
           ", save it as ", projectedClimateArchive, "."
         ))
       })
-      archive::archive_extract(projectedClimateArchive, projectedClimatePath)
-    } else {
-      if (!dir.exists(file.path(dirname(projectedClimatePath),
-                                paste0(P(sim)$climateGCM, "_ssp",
-                                       P(sim)$climateSSP, mod$studyAreaNameDir[[prov]])))) {
+      tryCatch({
         archive::archive_extract(projectedClimateArchive, projectedClimatePath)
-      }
+        }, error = function(e) {
+        unlink(file.path(projectedClimatePath, mod$studyAreaNameDir[prov]))
+        stop(paste0(
+          "The extraction of the file '", projectedClimateArchive, "' was unsuccessful, ",
+          "most likely due to its size. Please extract the file manually  to ",
+          projectedClimatePath, " (i.e., '7z x ", projectedClimateArchive, 
+          " -o", projectedClimatePath, "'."))
+      })
     }
     digestFiles <- digest::digest(file = projectedClimateArchive, algo = "xxhash64")
     digestYears <- CacheDigest(list(P(sim)$projectedFireYears))$outputHash
@@ -373,9 +378,7 @@ Init <- function(sim) {
       tryCatch({
         R.utils::withTimeout({
           googledrive::drive_download(file = as_id(normalsClimateUrl), path = normalsClimateArchive)
-        }, timeout = 1800, onTimeout = "error")
-      },
-      error = function(e) {
+        }, timeout = 1800, onTimeout = "error")}, error = function(e) {
         unlink(normalsClimateArchive)
         stop(paste0(
           "The download of the file '", basename(normalsClimateArchive), "' was unsuccessful, ",
@@ -385,11 +388,16 @@ Init <- function(sim) {
           ", save it as ", normalsClimateArchive, "."
         ))
       })
-      archive::archive_extract(normalsClimateArchive, normalsClimatePath)
-    } else {
-      if (!dir.exists(file.path(normalsClimatePath, paste0(mod$studyAreaNameDir[[prov]])))) {
+      tryCatch({
         archive::archive_extract(normalsClimateArchive, normalsClimatePath)
-      }
+      }, error = function(e) {
+        unlink(file.path(normalsClimatePath, mod$studyAreaNameDir[prov]))
+        stop(paste0(
+          "The extraction of the file '", normalsClimateArchive, "' was unsuccessful, ",
+          "most likely due to its size. Please extract the file manually  to ",
+          normalsClimatePath, " (i.e., '7z x ", normalsClimateArchive, 
+          " -o", normalsClimatePath, "'."))
+      })
     }
 
     Cache(
@@ -417,8 +425,29 @@ Init <- function(sim) {
 
     if (!file.exists(projAnnualClimateArchive)) {
       ## need to download and extract w/o prepInputs to preserve folder structure!
-      googledrive::drive_download(file = googledrive::as_id(projAnnualClimateUrl), path = projAnnualClimateArchive)
-      archive::archive_extract(projAnnualClimateArchive, projAnnualClimatePath)
+      tryCatch({
+        R.utils::withTimeout({
+          googledrive::drive_download(file = as_id(projAnnualClimateUrl), path = projAnnualClimateArchive)
+        }, timeout = 1800, onTimeout = "error")}, error = function(e) {
+          unlink(projAnnualClimateArchive)
+          stop(paste0(
+            "The download of the file '", basename(projAnnualClimateArchive), "' was unsuccessful, ",
+            "most likely due to its size and an unstable internet connection.",
+            "Please download it manually from ",
+            paste0("https://drive.google.com/file/d/", projAnnualClimateUrl),
+            ", save it as ", projAnnualClimateArchive, "."
+          ))
+        })
+      tryCatch({
+        archive::archive_extract(projAnnualClimateArchive, projAnnualClimatePath)
+      }, error = function(e) {
+        unlink(file.path(projAnnualClimatePath, mod$studyAreaNameDir[prov]))
+        stop(paste0(
+          "The extraction of the file '", projAnnualClimateArchive, "' was unsuccessful, ",
+          "most likely due to its size. Please extract the file manually  to ",
+          projAnnualClimatePath, " (i.e., '7z x ", projAnnualClimateArchive, 
+          " -o", projAnnualClimatePath, "'."))
+      })
     }
 
     Cache(makeLandRCS_projectedCMIandATA,
