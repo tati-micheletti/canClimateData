@@ -244,10 +244,6 @@ Init <- function(sim) {
         ))
       })
       archive::archive_extract(historicalClimateArchive, historicalClimatePath)
-    } else {
-      if (!dir.exists(tools::file_path_sans_ext(historicalClimateArchive))) {
-        archive::archive_extract(historicalClimateArchive, historicalClimatePath)
-      }
     }
 
     ## all downstream stuff from this one archive file should have same Cache assessment
@@ -321,12 +317,6 @@ Init <- function(sim) {
         ))
       })
       archive::archive_extract(projectedClimateArchive, projectedClimatePath)
-    } else {
-      if (!dir.exists(file.path(dirname(projectedClimatePath),
-                                paste0(P(sim)$climateGCM, "_ssp",
-                                       P(sim)$climateSSP, mod$studyAreaNameDir[[prov]])))) {
-        archive::archive_extract(projectedClimateArchive, projectedClimatePath)
-      }
     }
     digestFiles <- digest::digest(file = projectedClimateArchive, algo = "xxhash64")
     digestYears <- CacheDigest(list(P(sim)$projectedFireYears))$outputHash
@@ -386,10 +376,6 @@ Init <- function(sim) {
         ))
       })
       archive::archive_extract(normalsClimateArchive, normalsClimatePath)
-    } else {
-      if (!dir.exists(file.path(normalsClimatePath, paste0(mod$studyAreaNameDir[[prov]])))) {
-        archive::archive_extract(normalsClimateArchive, normalsClimatePath)
-      }
     }
 
     Cache(
