@@ -745,7 +745,6 @@ prepClimateData <- function(studyAreaNamesShort,
     return(climData)
   })
 
-  browser()
   filenamesToDelete <- Filenames(climDatAll)
 
   nlyrs <- reproducible::nlayers2(climDatAll[[1]])
@@ -753,7 +752,6 @@ prepClimateData <- function(studyAreaNamesShort,
   climDatAllMerged <- Map(nam = names(climDatAll[[1]]), function(nam) {
     message("layer ", names(climDatAll[[1]][[nam]]), "; ", match(nam, names(climDatAll[[1]])), " of ", nlyrs)
     ll <- unname(lapply(climDatAll, function(x) {
-      # x[[nam]][] <- values(x[[nam]])
       x[[nam]]
     } ))
     SpaDES.tools::mergeRaster(ll)
