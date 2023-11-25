@@ -230,10 +230,11 @@ Init <- function(sim) {
     checkPath(create = TRUE)
   normalsClimatePath <- checkPath(file.path(historicalClimatePath, "normals"), create = TRUE)
 
-  years <- list(P(sim)$historicalFireYears, P(sim)$projectedFireYears, NA)
+  years <- list(historicalFireYears = P(sim)$historicalFireYears,
+                projectedFireYears = P(sim)$projectedFireYears, normals = NA)
   climatePaths <- list(historicalClimatePath, projectedClimatePath, normalsClimatePath)
   climateURLs <- list(historicalClimateURL, projectedClimateUrl, normalsClimateUrl)
-  eras <- c("historical", "projected", "normals")
+  eras <- list("historical", "projected", "normals")
 
   out <- Map(era = eras, fireYears = years, climatePath = climatePaths, climateURLs = climateURLs,
       function(era, fireYears, climatePath, climateURLs) {
@@ -713,12 +714,13 @@ prepClimateData <- function(studyAreaNamesShort,
     filenameForSaving <- file.path(climatePath,
                                    paste0("MDC_", era[1], "_", SANshort, "_",
                                           paste(studyAreaName, collapse = "_"), ".tif"))
-    climData <- Cache(
-      prepInputs(
-        # for preProcess
-        url = as_id(climateURL),
-        destinationPath = climatePath,
-        # archive = climateArchive,
+                       climData <- Cache(
+                         prepInputs(
+                           # for preProcess
+                           targetFile = NA_character_,
+                           url = as_id(climateURL),
+                           destinationPath = climatePath,
+                           # archive = climateArchive,
 
         # For loading to R
         fun = fun,
@@ -731,16 +733,18 @@ prepClimateData <- function(studyAreaNamesShort,
 
         # for postProcessTo
         to = rasterToMatch,
-        maskTo = studyArea,
-        writeTo = filenameForSaving,
-        datatype = "INT2U",
-        useCache = FALSE # This is the internal cache for postProcessTo
-      ),
-      omitArgs = c("to", "maskTo"), # don't digest these each time
-      .functionName = paste0("makeMDC_for_", era[1], "_MDC"),
-      .cacheExtra = c(digestSA_RTM, SANshort),
-      quick = c("destinationPath", "archive", "writeTo"), # these are outputs; don't cache on them
-      userTags = c(paste0(era[1], "MDC"), SANshort, cacheTags))
+                           maskTo = studyArea,
+                           writeTo = filenameForSaving,
+                           datatype = "INT2U",
+                           useCache = FALSE, # This is the internal cache for postProcessTo
+
+                           overwrite = TRUE # If it exists, overwrite so it doesn't require manual intervention
+                         ),
+                         omitArgs = c("to", "maskTo", "overwrite"), # don't digest these each time
+                         .functionName = paste0("makeMDC_for_", era[1], "_MDC_", SANshort),
+                         .cacheExtra = c(digestSA_RTM, SANshort),
+                         quick = c("destinationPath", "archive", "writeTo"), # these are outputs; don't cache on them
+                         userTags = c(paste0(era[1], "MDC"), SANshort, cacheTags))
 
     return(climData)
   })
