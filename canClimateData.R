@@ -235,9 +235,20 @@ Init <- function(sim) {
   climatePaths <- list(historicalClimatePath, projectedClimatePath, normalsClimatePath)
   climateURLs <- list(historicalClimateURL, projectedClimateUrl, normalsClimateUrl)
   eras <- list("historical", "projected", "normals")
+  funs <- list(
+    quote(makeMDC(inputPath = checkPath(file.path(climatePath, SANlong),
+                                        create = TRUE),
+                  years = fireYears)),
+    quote(makeMDC(inputPath = checkPath(file.path(climatePath, SANlong),
+                                        create = TRUE),
+                  years = fireYears)),
+    quote(makeLandRCS_1950_2010_normals(
+      pathToNormalRasters = file.path(climatePaths, SANlong),
+      rasterToMatch = rasterToMatch)))
 
-  out <- Map(era = eras, fireYears = years, climatePath = climatePaths, climateURLs = climateURLs,
-      function(era, fireYears, climatePath, climateURLs) {
+  out <- Map(era = eras, fireYears = years, climatePath = climatePaths,
+             climateURLs = climateURLs, fun = funs,
+      function(era, fireYears, climatePath, climateURLs, fun) {
                out <- Cache(
                  prepClimateData(studyAreaNamesShort = mod$studyAreaNameShort,
                                  studyAreaNamesLong = mod$studyAreaNameDir,
@@ -246,12 +257,10 @@ Init <- function(sim) {
                                  rasterToMatch = sim$rasterToMatch, studyArea = sim$studyArea,
                                  currentModuleName = currentModule(sim),
                                  climatePath = climatePath, climateURLs = climateURLs,
+                                 normalsClimatePath = normalsClimatePath,
                                  digestSA_RTM = digestSA_RTM,
                                  era = era,
-                                 fun = quote(
-                                   makeMDC(inputPath = checkPath(file.path(climatePath, SANlong),
-                                                                 create = TRUE),
-                                           years = fireYears)),
+                                 fun = fun
                  ), omitArgs = c("rasterToMatch", "studyArea"), quick = c("climatePath"),
                  .functionName = paste0("prepClimateData_", era)
                )
