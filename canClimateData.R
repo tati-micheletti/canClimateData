@@ -571,10 +571,6 @@ Init <- function(sim) {
         ))
       })
       archive::archive_extract(normalsClimateArchive, normalsClimatePath)
-    } else {
-      if (!dir.exists(file.path(normalsClimatePath, paste0(mod$studyAreaNameDir[[prov]])))) {
-        archive::archive_extract(normalsClimateArchive, normalsClimatePath)
-      }
     }
 
     Cache(
