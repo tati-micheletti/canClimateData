@@ -782,8 +782,8 @@ prepClimateData <- function(studyAreaNamesShort,
                                         paste(studyAreaName, collapse = "_"), ".tif"))
   climDatAllMerged <- writeTo(climDatAllMerged, writeTo = filenameForSaving,
                               overwrite = TRUE)
-  rm(climDatAll)
-  unlink(filenamesToDelete)
+  # rm(climDatAll)
+  # unlink(filenamesToDelete)
 
   list("MDC" = climDatAllMerged)
 }
