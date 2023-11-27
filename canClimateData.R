@@ -243,7 +243,7 @@ Init <- function(sim) {
                                         create = TRUE),
                   years = fireYears)),
     quote(makeLandRCS_1950_2010_normals(
-      pathToNormalRasters = file.path(climatePaths, SANlong),
+      pathToNormalRasters = file.path(climatePath, SANlong),
       rasterToMatch = rasterToMatch)))
 
   out <- Map(era = eras, fireYears = years, climatePath = climatePaths,
