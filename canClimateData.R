@@ -774,7 +774,8 @@ prepClimateData <- function(studyAreaNamesShort,
   ## so fireSense matches fires + climate rasters by year.
   ## WARNING: names(climDatAllMerged) <- paste0('year', fireYears) # Bad
   ##          |-> allows for index mismatching
-  climDatAllMerged <- updateStackYearNames(climDatAllMerged, fireYears)
+  if (!grepl("normal", era)) # be loose with "normal" or "normals" because they should be equivalent
+    climDatAllMerged <- updateStackYearNames(climDatAllMerged, fireYears)
   compareGeom(climDatAllMerged, rasterToMatch)
 
   filenameForSaving <- file.path(climatePath,
