@@ -275,6 +275,7 @@ Init <- function(sim) {
                   years = fireYears)),
     quote(makeLandRCS_1950_2010_normals(pathToNormalRasters = file.path(climatePath, SANlong))),
     quote(makeLandRCS_projectedCMIandATA(normalMAT = normals[["MATnormal"]],
+                                         studyAreaForMask = studyAreaForMask,
                                          pathToFutureRasters = file.path(climatePath, SANlong),
                                          years = fireYears
     )))
@@ -319,11 +320,16 @@ Init <- function(sim) {
   sim$CMInormal <- normals[["CMInormal"]]
 
   # projected_annual
+  # undebug(prepInputs)
   eraHere <- era[[4]]
   allArgs <- modifyList2(climateEraArgs[[eraHere]], commonArgs, list(normals = normals)) # normals is used by the fun
+  allArgs$studyAreaForMask <- allArgs$studyArea
+  allArgs$studyArea <- NULL
+  allArgs$rasterToMatch <- NULL
+  allArgs$saveInner <- FALSE
   projCMIATA <- Cache(do.call(prepClimateData, allArgs, quote = TRUE),
-                                       omitArgs = omitArgs, quick = quick,
-                                       .functionName = prepClimateFunctionName(eraHere)) |>
+                      omitArgs = omitArgs, quick = quick,
+                      .functionName = prepClimateFunctionName(eraHere)) |>
     purrr::transpose()
 
   browser()
@@ -804,9 +810,9 @@ Init <- function(sim) {
 prepClimateData <- function(studyAreaNamesShort,
                             studyAreaNamesLong, climateURLs, # these are vectorized on studyAreaNamesShort
                             studyAreaName, fireYears,
-                            rasterToMatch, studyArea, currentModuleName,
+                            rasterToMatch = NULL, studyArea = NULL, currentModuleName,
                             climatePath, digestSA_RTM, era = c("historical", "projected"),
-                            fun, ...) {
+                            fun, saveInner = TRUE, saveOuter = TRUE, ...) {
 
   objsForDigest1 <- c("studyAreaName", "fireYears", "fun", "climatePath", "era", "currentModuleName")
   objs <- mget(objsForDigest1, envir = environment())
@@ -818,9 +824,11 @@ prepClimateData <- function(studyAreaNamesShort,
 
                        cacheTags <- c(studyAreaName, currentModuleName)
                        # climateArchive <- file.path(climatePath, paste0(studyAreaNameDir[[SANshort]], ".zip"))
-                       filenameForSaving <- file.path(climatePath,
-                                                      paste0("MDC_", era[1], "_", SANshort, "_",
-                                                             paste(studyAreaName, collapse = "_"), ".tif"))
+                       filenameForSaving <- NULL
+                       if (isTRUE(saveInner))
+                         filenameForSaving <- file.path(climatePath,
+                                                        paste0("MDC_", era[1], "_", SANshort, "_",
+                                                               paste(studyAreaName, collapse = "_"), ".tif"))
                        climData <- Cache(
                          prepInputs(
                            # for preProcess
@@ -857,7 +865,7 @@ prepClimateData <- function(studyAreaNamesShort,
                      })
 
   climDatAllMerged <- Cache(
-    transposeMergeWrite(climDatAll, era, fireYears, rasterToMatch, climatePath, studyAreaName),
+    transposeMergeWrite(climDatAll, era, fireYears, rasterToMatch, climatePath, studyAreaName, saveOuter),
     omitArgs = c("climDatAll", "era", "fireYears", "rasterToMatch", "climatePath", "studyAreaName"),
     .cacheExtra = c(digestSA_RTM, dig1, studyAreaNamesLong, studyAreaNamesShort, climateURLs)
   )
@@ -872,7 +880,8 @@ prepClimateFunctionName <- function(era) {
 }
 
 
-transposeMergeWrite <- function(climDatAll, era, fireYears, rasterToMatch, climatePath, studyAreaName) {
+transposeMergeWrite <- function(climDatAll, era, fireYears, rasterToMatch, climatePath, studyAreaName,
+                                saveOuter = TRUE) {
   nlyrs <- reproducible::nlayers2(climDatAll[[1]])
   message("merging spatial layers by year for ", era, " data :")
   climDatAllMerged <- Map(nam = names(climDatAll[[1]]), function(nam) {
@@ -896,10 +905,13 @@ transposeMergeWrite <- function(climDatAll, era, fireYears, rasterToMatch, clima
     climDatAllMerged <- updateStackYearNames(climDatAllMerged, fireYears)
   compareGeom(climDatAllMerged, rasterToMatch)
 
-  filenameForSaving <- file.path(climatePath,
-                                 paste0("MDC_", era[1], "_",
-                                        paste(studyAreaName, collapse = "_"), ".tif"))
-  climDatAllMerged <- writeTo(climDatAllMerged, writeTo = filenameForSaving,
-                              overwrite = TRUE)
+  filenameForSaving <- NULL
+  if (isTRUE(saveOuter)) {
+    filenameForSaving <- file.path(climatePath,
+                                   paste0("MDC_", era[1], "_",
+                                          paste(studyAreaName, collapse = "_"), ".tif"))
+    climDatAllMerged <- writeTo(climDatAllMerged, writeTo = filenameForSaving,
+                                overwrite = TRUE)
+  }
   climDatAllMerged
 }
