@@ -949,7 +949,7 @@ transposeMergeWrite <- function(climDatAll, climateType, climateYears, rasterToM
   climDatAllMerged <- if (is(climDatAllMerged[[1]], "SpatRaster"))
     terra::rast(climDatAllMerged) else raster::stack(climDatAllMerged)
 
-  varnames(climDatAllMerged) <- ""
+  # varnames(climDatAllMerged) <- ""
 
   ## The names need "year" at the start, because not every year will have fires (data issue in RIA),
   ## so fireSense matches fires + climate rasters by year.
