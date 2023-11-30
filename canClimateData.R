@@ -214,17 +214,17 @@ Init <- function(sim) {
   }
 
   ##
-  ## Five era-specific objects needed for each prepClimateData:
-  #  era: era name
+  ## Five climateType-specific objects needed for each prepClimateData:
+  #  climateType: climateType name
   #  climateURLs: URLs
   #  climatePath: output path; should be shared across project e.g., `inputPath(sim)`
-  #  fireYears: years for historical or projected data
+  #  climateYears: years for historical or projected data
   #  fun: a custom "load after preProcess" function
   ##
 
-  # Object 1 -- era
-  era <- list("historical", "projected_monthly", "normals", "projected_annual")
-  names(era) <- era
+  # Object 1 -- climateType
+  climateType <- list("historical", "projected_monthly", "normals", "projected_annual_ATA", "projected_annual_CMI")
+  names(climateType) <- climateType
 
   # Object 2 -- URLS
   ## lookup table to get climate urls  based on studyArea, GCM, and SSP
@@ -243,12 +243,19 @@ Init <- function(sim) {
 
   normalsClimateUrl <- dt[type == "hist_normals", GID]
   names(normalsClimateUrl) <- mod$studyAreaNameShort
-  climateURLs <- list(historicalClimateURL, projectedClimateUrlMonthly, normalsClimateUrl, projectedClimateUrlAnnual)
+  climateURLs <- list(historicalClimateURL,
+                      projectedClimateUrlMonthly,
+                      normalsClimateUrl,
+                      projectedClimateUrlAnnual,
+                      projectedClimateUrlAnnual)
 
-  # Object 3 -- fireYears
-  fireYears <- list(P(sim)$historicalFireYears,
-                    P(sim)$projectedFireYears, NA,
-                    P(sim)$projectedFireYears)
+  # Object 3 -- climateYears
+  climateYears <- list(P(sim)$historicalFireYears,
+                    P(sim)$projectedFireYears,
+                    NA,
+                    P(sim)$projectedFireYears,
+                    P(sim)$projectedFireYears
+                    )
 
   # Object 4. output paths (`climatePaths`)
   historicalClimatePath <- file.path(dPath, "climate", "historic") |>
@@ -262,26 +269,36 @@ Init <- function(sim) {
     checkPath(create = TRUE)
   normalsClimatePath <- checkPath(file.path(historicalClimatePath, "normals"), create = TRUE)
 
-  climatePath <- list(historicalClimatePath, projectedClimatePathMonthly,
-                      normalsClimatePath, projAnnualClimatePathAnnual)
+  climatePath <- list(historicalClimatePath,
+                      projectedClimatePathMonthly,
+                      normalsClimatePath,
+                      projAnnualClimatePathAnnual,
+                      projAnnualClimatePathAnnual)
 
   # Object 5 -- the function to call within prepClimate
   fun <- list(
     quote(makeMDC(inputPath = checkPath(file.path(climatePath, SANlong),
                                         create = TRUE),
-                  years = fireYears)),
+                  years = climateYears)),
     quote(makeMDC(inputPath = checkPath(file.path(climatePath, SANlong),
                                         create = TRUE),
-                  years = fireYears)),
+                  years = climateYears)),
     quote(makeLandRCS_1950_2010_normals(pathToNormalRasters = file.path(climatePath, SANlong))),
-    quote(makeLandRCS_projectedCMIandATA(normalMAT = normals[["MATnormal"]],
+    quote(makeLandRCS_projectedATA(normalMAT = normals[["MATnormal"]],
                                          studyAreaForMask = studyAreaForMask,
                                          pathToFutureRasters = file.path(climatePath, SANlong),
-                                         years = fireYears
-    )))
+                                         years = climateYears)),
+    quote(makeLandRCS_projectedCMI(normalMAT = normals[["MATnormal"]],
+                                         studyAreaForMask = studyAreaForMask,
+                                         pathToFutureRasters = file.path(climatePath, SANlong),
+                                         years = climateYears))
+    )
 
-  # Transpose the lists so each era is top element
-  climateEraArgs <- purrr::transpose(listNamed(era, fireYears, climatePath, climateURLs, fun))
+  # Object 6 -- what variable is being calculated
+  climateVar <- list("MDC", "MDC", "Many", "ATA", "CMI")
+
+  # Transpose the lists so each climateType is top element
+  climateEraArgs <- purrr::transpose(listNamed(climateType, climateYears, climatePath, climateURLs, fun, climateVar))
 
   commonArgs <- list(studyAreaNamesShort = mod$studyAreaNameShort,
                      studyAreaNamesLong = mod$studyAreaNameDir,
@@ -296,7 +313,7 @@ Init <- function(sim) {
   # The 4 steps below can be put into a loop, but this is perhaps clearer to see each step,
   #  particularly with the different assignments to sim$
   # historical
-  eraHere <- era[[1]]
+  eraHere <- climateType[[1]]
   allArgs <- modifyList2(climateEraArgs[[eraHere]], commonArgs)
   out <- Cache(do.call(prepClimateData, allArgs, quote = TRUE), # quote is needed to not evaluated the `fun`
                                         omitArgs = omitArgs, quick = quick,
@@ -304,7 +321,7 @@ Init <- function(sim) {
   sim$historicalClimateRasters <- list("MDC" = out)
 
   # projected_monthly
-  eraHere <- era[[2]]
+  eraHere <- climateType[[2]]
   allArgs <- modifyList2(climateEraArgs[[eraHere]], commonArgs)
   out <- Cache(do.call(prepClimateData, allArgs, quote = TRUE),
                                        omitArgs = omitArgs, quick = quick,
@@ -312,7 +329,7 @@ Init <- function(sim) {
   sim$projectedClimateRasters <- list("MDC" = out)
 
   # normals
-  eraHere <- era[[3]]
+  eraHere <- climateType[[3]]
   allArgs <- modifyList2(climateEraArgs[[eraHere]], commonArgs)
   normals <- Cache(do.call(prepClimateData, allArgs, quote = TRUE),
                    omitArgs = omitArgs, quick = quick,
@@ -321,16 +338,22 @@ Init <- function(sim) {
 
   # projected_annual
   # undebug(prepInputs)
-  eraHere <- era[[4]]
-  allArgs <- modifyList2(climateEraArgs[[eraHere]], commonArgs, list(normals = normals)) # normals is used by the fun
-  allArgs$studyAreaForMask <- allArgs$studyArea
-  allArgs$studyArea <- NULL
-  allArgs$rasterToMatch <- NULL
-  allArgs$saveInner <- FALSE
+  eraHere <- climateType[[4]]
+  sa <- commonArgs$studyArea
+  commonArgsSubset <- commonArgs[!names(commonArgs) %in% c("studyArea", "rasterToMatch")]
+  commonArgsSubset$studyAreaForMask <- sa
+  commonArgsSubset$saveInner <- FALSE
+  allArgs <- modifyList2(climateEraArgs[[eraHere]], commonArgsSubset, list(normals = normals)) # normals is used by the fun
   projCMIATA <- Cache(do.call(prepClimateData, allArgs, quote = TRUE),
                       omitArgs = omitArgs, quick = quick,
-                      .functionName = prepClimateFunctionName(eraHere)) |>
-    purrr::transpose()
+                      .functionName = prepClimateFunctionName(eraHere))
+  browser()
+
+  eraHere <- climateType[[5]] # very similar to climateType[[4]]
+  allArgs <- modifyList2(climateEraArgs[[eraHere]], commonArgsSubset, list(normals = normals)) # normals is used by the fun
+  projCMIATA <- Cache(do.call(prepClimateData, allArgs, quote = TRUE),
+                      omitArgs = omitArgs, quick = quick,
+                      .functionName = prepClimateFunctionName(eraHere))
 
   browser()
   sim$ATAstack <- Cache(SpaDES.tools::mergeRaster, projCMIATA[["projectedATA"]])
@@ -344,14 +367,14 @@ Init <- function(sim) {
   ## 3) assign normal CMI to sim
   ## 4) run makeLandRCS_projectedCMIandATA, with normal MAT as an input arg. It returns a list of raster stacks (projected ATA and CMI). Assign both to sim
   ## 5) Profit
-  # out <- Map(era = eras, fireYears = years, climatePath = climatePaths,
+  # out <- Map(era = eras, climateYears = years, climatePath = climatePaths,
   #            climateURLs = climateURLs, fun = funs,
-  #     function(era, fireYears, climatePath, climateURLs, fun) {
+  #     function(era, climateYears, climatePath, climateURLs, fun) {
   #              out <- Cache(
   #                prepClimateData(studyAreaNamesShort = mod$studyAreaNameShort,
   #                                studyAreaNamesLong = mod$studyAreaNameDir,
   #                                studyAreaName = P(sim)$studyAreaName,
-  #                                fireYears = fireYears, # not used by normals
+  #                                climateYears = climateYears, # not used by normals
   #                                rasterToMatch = sim$rasterToMatch, studyArea = sim$studyArea,
   #                                currentModuleName = currentModule(sim),
   #                                climatePath = climatePath, climateURLs = climateURLs,
@@ -372,7 +395,7 @@ Init <- function(sim) {
   # sim$historicalClimateRasters <- Cache(
   #   prepClimateData(studyAreaNamesShort = mod$studyAreaNameShort, studyAreaNamesLong = mod$studyAreaNameDir,
   #                   studyAreaName = P(sim)$studyAreaName,
-  #                   fireYears = P(sim)$historicalFireYears,
+  #                   climateYears = P(sim)$historicalFireYears,
   #                   rasterToMatch = sim$rasterToMatch, studyArea = sim$studyArea,
   #                   currentModuleName = currentModule(sim),
   #                   climatePath = historicalClimatePath, climateURLs = historicalClimateURL,
@@ -381,10 +404,10 @@ Init <- function(sim) {
   #                   fun = quote(
   #                     makeMDC(inputPath = checkPath(file.path(climatePath, SANlong),
   #                                                   create = TRUE),
-  #                             years = fireYears)),
+  #                             years = climateYears)),
   #                   # climatePath = climatePath, # for makeMDC
   #                   # studyAreaNameDir = studyAreaNameLong[[prov]], # for makeMDC
-  #                   # fireYears = fireYears
+  #                   # climateYears = climateYears
   #                   ), omitArgs = c("rasterToMatch", "studyArea"), quick = c("climatePath"),
   #   .functionName = "prepClimateData_historical"
   # )
@@ -393,7 +416,7 @@ Init <- function(sim) {
   # sim$projectedClimateRasters <-
   #   prepClimateData(studyAreaNamesShort = mod$studyAreaNameShort, studyAreaNamesLong = mod$studyAreaNameDir,
   #                   studyAreaName = P(sim)$studyAreaName,
-  #                   fireYears = P(sim)$projectedFireYears,
+  #                   climateYears = P(sim)$projectedFireYears,
   #                   rasterToMatch = sim$rasterToMatch, studyArea = sim$studyArea,
   #                   currentModuleName = currentModule(sim),
   #                   climatePath = projectedClimatePath, climateURLs = projectedClimateUrl,
@@ -402,14 +425,14 @@ Init <- function(sim) {
   #                   fun = quote(
   #                     makeMDC(inputPath = checkPath(file.path(climatePath, SANlong),
   #                                                   create = TRUE),
-  #                             years = fireYears)),
+  #                             years = climateYears)),
   #                   # climatePath = climatePath, # for makeMDC
   #                   # studyAreaNameDir = studyAreaNameDir[[prov]], # for makeMDC
-  #                   fireYears = fireYears) # for makeMDC)
+  #                   climateYears = climateYears) # for makeMDC)
   #
   # norms <- prepClimateData(studyAreaNamesShort = mod$studyAreaNameShort, studyAreaNamesLong = mod$studyAreaNameDir,
   #                 studyAreaName = P(sim)$studyAreaName,
-  #                 fireYears = P(sim)$projectedFireYears,
+  #                 climateYears = P(sim)$projectedFireYears,
   #                 rasterToMatch = sim$rasterToMatch, studyArea = sim$studyArea,
   #                 currentModuleName = currentModule(sim),
   #                 climatePath = normalsClimatePath, climateURLs = projectedClimateUrl,
@@ -800,21 +823,48 @@ Init <- function(sim) {
 
 #' prepInputs for climate data
 #'
-#' @param
+#' @param studyAreaNamesShort A character vector of short names for the "regions", e.g., c("AB", "BC")
+#' @param studyAreaNamesLong A character vector of long names for the "regions" e.g., c("Alberta", "British Columbia")
+#' @param climateURLs A character vector of urls to pass -- one at a time -- to `prepInputs(url = ...)`
+#' @param studyAreaName A character string that represents the studyArea for the project e.g., "Edehzhie"
+#' @param climateYears A numeric vector of years to extract climate data for e.g., 1991:2020 or 2025:2100
+#' @param rasterToMatch A `SpatRaster` to pass to `prepInputs` --> which will pass to `postProcessTo`.
+#'   To skip `postProcessTo`, user must set this to `NULL` and `studyArea = NULL, saveInner = FALSE`.
+#' @param studyArea A `SpatVector` to pass to `prepInputs` --> which will pass to `postProcessTo`.
+#'   To skip `postProcessTo`, user must set this to `NULL` and `studyArea = NULL, saveInner = FALSE`.
+#' @param currentModuleName A character string e.g., extracted from `currentModule(sim)`, defaults to `"NoModule"`
+#' @param climatePath A character string that is passed to `prepInputs(..., destinationPath = climatePath)`.
+#'   If `saveInner = TRUE` (the default), this will also be used to build the filename passed to
+#'   `postProcessTo(..., writeTo = XXX)`.
+#' @param digestSA_RTM A charater string that represents the a unique identifier of the `studyArea` and
+#'   `rasterToMatch` objects, e.g., from `CacheDigest(list(studyArea, rasterToMatch))$outputHash`. This is
+#'   used to save time internally so the many `prepInputs` calls don't have to keep digesting these two
+#'   spatial objects.
+#' @param climateType A character string that is used as a label for this call. Intended to be used
+#'   to indicate e.g., "historical" or "projected" or more nuance, like "projected_annual_ATA".
+#'
 #' @param fun A quoted function call that is passed to `fun` argument in `prepInputs`.
 #'   This can use `SANshort` (each of `studyAreaNamesShort`),
 #'   `SANlong` (each of `studyAreaNamesLong`), `climatePath`, `climateURL` (each of `climateURL`),
-#'   `fireYears`, or anything passed to `...`
+#'   `climateYears`, or anything passed to `...`
+#' @param climateVar A character string used as a label (for filenames and other labels for messaging)
+#'   that indicates the type of climate variable
+#'   being calculated/downloaded/derived e.g., `"MDC"` (which is the default).
+#' @param saveInner Length 1 logical. Should `postProcessTo(...)` be passed a `writeTo` for each
+#'   individual `studyAreaShort`
+#' @param saveOuter Length 1 logical. After `mergeRaster` of all the `studyAreaShort`, should
+#'   the final `SpatRaster` be saved to disk.
 #' @param ... Any optional named argument needed for `fun`
+#' @export
 #'
 prepClimateData <- function(studyAreaNamesShort,
                             studyAreaNamesLong, climateURLs, # these are vectorized on studyAreaNamesShort
-                            studyAreaName, fireYears,
-                            rasterToMatch = NULL, studyArea = NULL, currentModuleName,
-                            climatePath, digestSA_RTM, era = c("historical", "projected"),
-                            fun, saveInner = TRUE, saveOuter = TRUE, ...) {
+                            studyAreaName, climateYears,
+                            rasterToMatch = NULL, studyArea = NULL, currentModuleName = "NoModule",
+                            climatePath, digestSA_RTM, climateType = c("historical", "projected"),
+                            fun, climateVar = "MDC", saveInner = TRUE, saveOuter = TRUE, ...) {
 
-  objsForDigest1 <- c("studyAreaName", "fireYears", "fun", "climatePath", "era", "currentModuleName")
+  objsForDigest1 <- c("studyAreaName", "climateYears", "fun", "climatePath", "climateType", "currentModuleName")
   objs <- mget(objsForDigest1, envir = environment())
   dig1 <- CacheDigest(objsToDigest = objs)$outputHash
   climDatAll <-  Map(SANshort = studyAreaNamesShort,
@@ -827,7 +877,7 @@ prepClimateData <- function(studyAreaNamesShort,
                        filenameForSaving <- NULL
                        if (isTRUE(saveInner))
                          filenameForSaving <- file.path(climatePath,
-                                                        paste0("MDC_", era[1], "_", SANshort, "_",
+                                                        paste0(climateVar, "_", climateType[1], "_", SANshort, "_",
                                                                paste(studyAreaName, collapse = "_"), ".tif"))
                        climData <- Cache(
                          prepInputs(
@@ -843,7 +893,7 @@ prepClimateData <- function(studyAreaNamesShort,
                            SANlong = SANlong,
                            climatePath = climatePath,
                            climateURL = climateURL,
-                           fireYears = fireYears,
+                           climateYears = climateYears,
                            ...,
 
                            # for postProcessTo
@@ -856,17 +906,18 @@ prepClimateData <- function(studyAreaNamesShort,
                            overwrite = TRUE # If it exists, overwrite so it doesn't require manual intervention
                          ),
                          omitArgs = c("to", "maskTo", "overwrite", "fun"), # don't digest these each time
-                         .functionName = paste0("makeMDC_for_", era[1], "_MDC_", SANshort),
+                         .functionName = paste0("prepInputs_", format(fun[[1]]), "_", climateType[1], "_", SANshort),
                          .cacheExtra = c(digestSA_RTM, dig1),
                          quick = c("destinationPath", "archive", "writeTo", "climatePath"), # these are outputs; don't cache on them
-                         userTags = c(paste0(era[1], "MDC"), SANshort, cacheTags))
+                         userTags = c(paste0(climateType[1]), SANshort, cacheTags))
 
                        return(climData)
                      })
 
   climDatAllMerged <- Cache(
-    transposeMergeWrite(climDatAll, era, fireYears, rasterToMatch, climatePath, studyAreaName, saveOuter),
-    omitArgs = c("climDatAll", "era", "fireYears", "rasterToMatch", "climatePath", "studyAreaName"),
+    transposeMergeWrite(climDatAll, climateType, climateYears, rasterToMatch,
+                        climatePath, studyAreaName, saveOuter, climateVar),
+    omitArgs = c("climDatAll", "climateType", "climateYears", "rasterToMatch", "climatePath", "studyAreaName"),
     .cacheExtra = c(digestSA_RTM, dig1, studyAreaNamesLong, studyAreaNamesShort, climateURLs)
   )
 
@@ -875,15 +926,15 @@ prepClimateData <- function(studyAreaNamesShort,
 }
 
 
-prepClimateFunctionName <- function(era) {
-  paste0("prepClimateData_", era)
+prepClimateFunctionName <- function(climateType) {
+  paste0("prepClimateData_", climateType)
 }
 
 
-transposeMergeWrite <- function(climDatAll, era, fireYears, rasterToMatch, climatePath, studyAreaName,
-                                saveOuter = TRUE) {
+transposeMergeWrite <- function(climDatAll, climateType, climateYears, rasterToMatch, climatePath, studyAreaName,
+                                saveOuter = TRUE, climateVar = "MDC") {
   nlyrs <- reproducible::nlayers2(climDatAll[[1]])
-  message("merging spatial layers by year for ", era, " data :")
+  message("merging spatial layers by year for ", climateType, " data :")
   climDatAllMerged <- Map(nam = names(climDatAll[[1]]), function(nam) {
     message("layer ", names(climDatAll[[1]][[nam]]), "; ", match(nam, names(climDatAll[[1]])), " of ", nlyrs)
     ll <- unname(lapply(climDatAll, function(x) {
@@ -898,17 +949,17 @@ transposeMergeWrite <- function(climDatAll, era, fireYears, rasterToMatch, clima
 
   ## The names need "year" at the start, because not every year will have fires (data issue in RIA),
   ## so fireSense matches fires + climate rasters by year.
-  ## WARNING: names(climDatAllMerged) <- paste0('year', fireYears) # Bad
+  ## WARNING: names(climDatAllMerged) <- paste0('year', climateYears) # Bad
   ##          |-> allows for index mismatching
 
-  if (!grepl("normal", era)) # be loose with "normal" or "normals" because they should be equivalent
-    climDatAllMerged <- updateStackYearNames(climDatAllMerged, fireYears)
+  if (!grepl("normal", climateType)) # be loose with "normal" or "normals" because they should be equivalent
+    climDatAllMerged <- updateStackYearNames(climDatAllMerged, climateYears)
   compareGeom(climDatAllMerged, rasterToMatch)
 
   filenameForSaving <- NULL
   if (isTRUE(saveOuter)) {
     filenameForSaving <- file.path(climatePath,
-                                   paste0("MDC_", era[1], "_",
+                                   paste0(climateVar, "_", climateType[1], "_",
                                           paste(studyAreaName, collapse = "_"), ".tif"))
     climDatAllMerged <- writeTo(climDatAllMerged, writeTo = filenameForSaving,
                                 overwrite = TRUE)
