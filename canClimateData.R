@@ -914,6 +914,10 @@ prepClimateData <- function(studyAreaNamesShort,
                        return(climData)
                      })
 
+  if (is.null(rasterToMatch))
+    if (!is.null(list(...)$normals))
+      rasterToMatch <- list(...)$normals[[1]]
+
   climDatAllMerged <- Cache(
     transposeMergeWrite(climDatAll, climateType, climateYears, rasterToMatch,
                         climatePath, studyAreaName, saveOuter, climateVar),
