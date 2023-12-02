@@ -936,7 +936,6 @@ prepClimateFunctionName <- function(climateType) {
 
 transposeMergeWrite <- function(climDatAll, climateType, climateYears, rasterToMatch, climatePath, studyAreaName,
                                 saveOuter = TRUE, climateVar = "MDC") {
-
   if (isTRUE(saveOuter)) {
     filenameForSaving <- file.path(climatePath,
                                    paste0(climateVar, "_", climateType[1], "_",
