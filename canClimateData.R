@@ -321,6 +321,7 @@ Init <- function(sim) {
   sim$historicalClimateRasters <- list("MDC" = out)
 
   # projected_monthly
+  debug(transposeMergeWrite)
   eraHere <- climateType[[2]]
   allArgs <- modifyList2(climateEraArgs[[eraHere]], commonArgs)
   out <- Cache(do.call(prepClimateData, allArgs, quote = TRUE),
@@ -337,30 +338,28 @@ Init <- function(sim) {
   sim$CMInormal <- normals[["CMInormal"]]
 
   # projected_annual
-  # undebug(prepInputs)
-  eraHere <- climateType[[4]]
+  eraHere <- climateType[[4]] # projected ATA
   sa <- commonArgs$studyArea
   commonArgsSubset <- commonArgs[!names(commonArgs) %in% c("studyArea", "rasterToMatch")]
   commonArgsSubset$studyAreaForMask <- sa
   commonArgsSubset$saveInner <- FALSE
   allArgs <- modifyList2(climateEraArgs[[eraHere]], commonArgsSubset, list(normals = normals)) # normals is used by the fun
-  projCMIATA <- Cache(do.call(prepClimateData, allArgs, quote = TRUE),
+  projATA <- Cache(do.call(prepClimateData, allArgs, quote = TRUE),
                       omitArgs = omitArgs, quick = quick,
                       .functionName = prepClimateFunctionName(eraHere))
-  browser()
 
-  eraHere <- climateType[[5]] # very similar to climateType[[4]]
+  eraHere <- climateType[[5]] # CMI -- very similar to climateType[[4]]
   allArgs <- modifyList2(climateEraArgs[[eraHere]], commonArgsSubset, list(normals = normals)) # normals is used by the fun
-  projCMIATA <- Cache(do.call(prepClimateData, allArgs, quote = TRUE),
-                      omitArgs = omitArgs, quick = quick,
-                      .functionName = prepClimateFunctionName(eraHere))
+  projCMI <- Cache(do.call(prepClimateData, allArgs, quote = TRUE),
+                   omitArgs = omitArgs, quick = quick,
+                   .functionName = prepClimateFunctionName(eraHere))
 
-  browser()
-  sim$ATAstack <- Cache(SpaDES.tools::mergeRaster, projCMIATA[["projectedATA"]])
-  sim$CMIstack <- Cache(SpaDES.tools::mergeRaster, projCMIATA[["projectedCMI"]])
-
-
-  browser()
+  # browser()
+  # sim$ATAstack <- Cache(SpaDES.tools::mergeRaster, projCMIATA[["projectedATA"]])
+  # sim$CMIstack <- Cache(SpaDES.tools::mergeRaster, projCMIATA[["projectedCMI"]])
+  #
+  #
+  # browser()
   ## CLIMATE DATA FOR gmcsDataPrep:
   ## 1) get and unzip normals and projected annual
   ## 2) run makeLandRCS_1950_2010normals, it returns a raster stack with two layers, normal MAT, and normal CMI
@@ -937,36 +936,56 @@ prepClimateFunctionName <- function(climateType) {
 
 transposeMergeWrite <- function(climDatAll, climateType, climateYears, rasterToMatch, climatePath, studyAreaName,
                                 saveOuter = TRUE, climateVar = "MDC") {
-  nlyrs <- reproducible::nlayers2(climDatAll[[1]])
-  message("merging spatial layers by year for ", climateType, " data :")
-  climDatAllMerged <- Map(nam = names(climDatAll[[1]]), function(nam) {
-    message("layer ", names(climDatAll[[1]][[nam]]), "; ", match(nam, names(climDatAll[[1]])), " of ", nlyrs)
-    ll <- unname(lapply(climDatAll, function(x) {
-      x[[nam]]
-    } ))
-    SpaDES.tools::mergeRaster(ll)
-  })
-  climDatAllMerged <- if (is(climDatAllMerged[[1]], "SpatRaster"))
-    terra::rast(climDatAllMerged) else raster::stack(climDatAllMerged)
 
-  varnames(climDatAllMerged) <- ""
-
-  ## The names need "year" at the start, because not every year will have fires (data issue in RIA),
-  ## so fireSense matches fires + climate rasters by year.
-  ## WARNING: names(climDatAllMerged) <- paste0('year', climateYears) # Bad
-  ##          |-> allows for index mismatching
-
-  if (!grepl("normal", climateType)) # be loose with "normal" or "normals" because they should be equivalent
-    climDatAllMerged <- updateStackYearNames(climDatAllMerged, climateYears)
-  compareGeom(climDatAllMerged, rasterToMatch)
-
-  filenameForSaving <- NULL
   if (isTRUE(saveOuter)) {
     filenameForSaving <- file.path(climatePath,
                                    paste0(climateVar, "_", climateType[1], "_",
                                           paste(studyAreaName, collapse = "_"), ".tif"))
-    climDatAllMerged <- writeTo(climDatAllMerged, writeTo = filenameForSaving,
-                                overwrite = TRUE)
+  } else {
+    filenameForSaving <- tempfile(fileext = ".tif")
+  }
+
+  message("Mergins spatial layers using sf::gdal_utils('warp'...)")
+  fns <- Filenames(climDatAll)
+  fns <- fns[c("AB", "BC", "SK", "YT", "NT")]
+  system.time(sf::gdal_utils(util = "warp", source = fns,
+                 destination = filenameForSaving))
+
+  climDatAllMerged <- terra::rast(filenameForSaving)
+  if (FALSE) {
+    nlyrs <- reproducible::nlayers2(climDatAll[[1]])
+    message("merging spatial layers by year for ", climateType, " data :")
+    climDatAllMerged <- Map(nam = names(climDatAll[[1]]), function(nam, clim) {
+      message("layer ", names(climDatAll[[1]][[nam]]), "; ", match(nam, names(climDatAll[[1]])), " of ", nlyrs)
+      ll <- unname(lapply(climDatAll, function(x) {
+        x[[nam]]
+      } ))
+      browser()
+      SpaDES.tools::mergeRaster(ll)
+    })
+    climDatAllMerged <- if (is(climDatAllMerged[[1]], "SpatRaster"))
+      terra::rast(climDatAllMerged) else raster::stack(climDatAllMerged)
+
+
+    varnames(climDatAllMerged) <- ""
+
+    ## The names need "year" at the start, because not every year will have fires (data issue in RIA),
+    ## so fireSense matches fires + climate rasters by year.
+    ## WARNING: names(climDatAllMerged) <- paste0('year', climateYears) # Bad
+    ##          |-> allows for index mismatching
+
+    if (!grepl("normal", climateType)) # be loose with "normal" or "normals" because they should be equivalent
+      climDatAllMerged <- updateStackYearNames(climDatAllMerged, climateYears)
+    compareGeom(climDatAllMerged, rasterToMatch)
+
+    filenameForSaving <- NULL
+    if (isTRUE(saveOuter)) {
+      filenameForSaving <- file.path(climatePath,
+                                     paste0(climateVar, "_", climateType[1], "_",
+                                            paste(studyAreaName, collapse = "_"), ".tif"))
+      climDatAllMerged <- writeTo(climDatAllMerged, writeTo = filenameForSaving,
+                                  overwrite = TRUE)
+    }
   }
   climDatAllMerged
 }
