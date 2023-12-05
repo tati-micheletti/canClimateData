@@ -946,7 +946,6 @@ transposeMergeWrite <- function(climDatAll, climateType, climateYears, rasterToM
 
   message("Merging spatial layers using sf::gdal_utils('warp'...)")
   fns <- Filenames(climDatAll)
-  fns <- fns[c("AB", "BC", "SK", "YT", "NT")]
   system.time(sf::gdal_utils(util = "warp", source = fns,
                  destination = filenameForSaving))
 
