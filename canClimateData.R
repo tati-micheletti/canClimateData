@@ -601,7 +601,6 @@ transposeMergeWrite <- function(climDatAll, climateType, climateYears, leadingAr
     system.time(sf::gdal_utils(util = "warp", source = fns,
                                destination = filenameForSaving,
                                options = "-overwrite"))
-    }
   climDatAllMerged <- terra::rast(filenameForSaving)
 
   climDatAllMerged
