@@ -71,7 +71,7 @@ defineModule(sim, list(
                  desc = "study area used for simulation",
                  sourceURL = NA),
     expectsInput("studyAreaLarge", "sf",
-                 desc = "study area used for module parameterization (buffered to mitigate edge effects)", 
+                 desc = "study area used for module parameterization (buffered to mitigate edge effects)",
                  sourceURL = NA),
     expectsInput("studyAreaReporting", "sf",
                  desc = "study area used for reporting/post-processing", sourceURL = NA)
@@ -169,7 +169,7 @@ Init <- function(sim) {
   )
 
   stopifnot(all(whereAmI %in% provsWithData$longName))
-  if (all(!is.null(P(sim)$leadingArea), 
+  if (all(!is.null(P(sim)$leadingArea),
           !P(sim)$leadingArea %in% provsWithData$shortName))
     stop("The parameter leadingArea needs to be the short name of a Canadian Province OR NULL")
 
@@ -208,8 +208,8 @@ Init <- function(sim) {
   #                    SK = "https://drive.google.com/file/d/1CooPdqc3SlVVU7y_BaPfZD0OXt42fjBC/",
   #                    YT = "https://drive.google.com/file/d/1CUMjLFGdGtwaQlErQ0Oq89ICUCcX641Q/",
   #                    RIA = "https://drive.google.com/file/d/13sGg1X9DEOSkedg1m0PxcdJiuBESk072/")
-  # 
-  # 
+  #
+  #
   #   ## get pre-made DEM to use with climate data
   #   dems <- lapply(mod$studyAreaNameShort, function(prov) {
   #     cacheTags <- c(prov, currentModule(sim))
@@ -312,17 +312,20 @@ Init <- function(sim) {
   # Transpose the lists so each climateType is top element
   climateEraArgs <- purrr::transpose(listNamed(climateType, climateYears, climatePath, climateURLs, fun, climateVar))
 
+  if (is.null(P(sim)$leadingArea))
+    leadingArea <- mod$studyAreaNameShort
+
   commonArgs <- list(studyAreaNamesShort = mod$studyAreaNameShort,
                      studyAreaNamesLong = mod$studyAreaNameDir,
                      studyAreaName = P(sim)$studyAreaName,
                      rasterToMatch = sim$rasterToMatchLarge, studyArea = sim$studyAreaLarge,
                      currentModuleName = currentModule(sim),
                      digestSA_RTM = digestSA_RTM,
-                     leadingArea = P(sim)$leadingArea)
+                     leadingArea = leadingArea)
 
   omitArgs <- c("rasterToMatch", "studyArea")
   quick <- c("climatePath")
- 
+
   # The 4 steps below can be put into a loop, but this is perhaps clearer to see each step,
   #  particularly with the different assignments to sim$
   # historical
@@ -400,7 +403,7 @@ Init <- function(sim) {
     sim$studyAreaReporting <- sim$studyArea
   }
 
-  # if (!suppliedElsewhere("studyArea", sim)) { # This is the second call to !suppliedElsewhere("studyArea", sim) 
+  # if (!suppliedElsewhere("studyArea", sim)) { # This is the second call to !suppliedElsewhere("studyArea", sim)
   #   ## NOTE: studyArea and studyAreaLarge are the same [buffered] area
   #   sim$studyArea <- sf::st_buffer(sim$studyArea, P(sim)$bufferDist)
   # }
@@ -551,9 +554,9 @@ prepClimateData <- function(studyAreaNamesShort,
   }
 
   climDatAllMerged <- Cache(
-    transposeMergeWrite(climDatAll = climDatAll, climateType = climateType, climateYears = climateYears, 
-                        rasterToMatch = rasterToMatch, climatePath = climatePath, 
-                        studyAreaName = studyAreaName, saveOuter = saveOuter, climateVar = climateVar, 
+    transposeMergeWrite(climDatAll = climDatAll, climateType = climateType, climateYears = climateYears,
+                        rasterToMatch = rasterToMatch, climatePath = climatePath,
+                        studyAreaName = studyAreaName, saveOuter = saveOuter, climateVar = climateVar,
                         leadingArea = leadingArea),
     omitArgs = c("climDatAll", "climateType", "climateYears", "rasterToMatch", "climatePath", "studyAreaName"),
     .cacheExtra = c(digestSA_RTM, dig1, studyAreaNamesLong, studyAreaNamesShort, climateURLs)
@@ -568,7 +571,7 @@ prepClimateFunctionName <- function(climateType) {
   paste0("prepClimateData_", climateType)
 }
 
-transposeMergeWrite <- function(climDatAll, climateType, climateYears, leadingArea, 
+transposeMergeWrite <- function(climDatAll, climateType, climateYears, leadingArea,
                                 rasterToMatch, climatePath, studyAreaName,
                                 saveOuter = TRUE, climateVar = "MDC") {
 
@@ -583,17 +586,17 @@ transposeMergeWrite <- function(climDatAll, climateType, climateYears, leadingAr
   fns <- Filenames(climDatAll)
   if (length(fns) > 1){
       for (i in 1:length(climDatAll)){
-    if (all(inMemory(climDatAll[[i]]), 
+    if (all(inMemory(climDatAll[[i]]),
             fns[i]=="")){
-      fns[i] <- file.path(climatePath, 
+      fns[i] <- file.path(climatePath,
                           paste0(climateVar, "_", climateType[1], "_",
                                  paste(names(fns[i]), collapse = "_"), ".tif"))
-      writeRaster(x = climDatAll[[i]], filename = fns[i], 
+      writeRaster(x = climDatAll[[i]], filename = fns[i],
                   overwrite = TRUE)
     }
       }
   } else { # If we only have one raster/study area, being it in a list or a raster
-    if (all(inMemory(climDatAll), 
+    if (all(inMemory(climDatAll),
             fns=="")){
       fns <- if (is(climDatAll, "list")) climDatAll[[1]] else climDatAll
     }
