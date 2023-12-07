@@ -19,7 +19,7 @@ defineModule(sim, list(
   documentation = deparse(list("README.md", "canClimateData.Rmd")),
   reqdPkgs = list("archive", "digest", "geodata", "googledrive", "purrr",
                   "R.utils", "sf", "spatialEco", "terra",
-                  "PredictiveEcology/climateData@development (>= 1.0.1)",
+                  "PredictiveEcology/climateData@development (>= 1.0.5)",
                   "PredictiveEcology/fireSenseUtils@development (>= 0.0.5.9046)",
                   "PredictiveEcology/LandR@development (>= 1.1.0.9064)",
                   "PredictiveEcology/reproducible@development (>= 2.0.8.9001)",
@@ -544,6 +544,11 @@ prepClimateData <- function(studyAreaNamesShort,
   if (is.null(rasterToMatch))
     if (!is.null(list(...)$normals))
       rasterToMatch <- list(...)$normals[[1]]
+
+  #temporary workaround (06/12/2023) to terra bug with NAflag when INT1U/INT2U passed
+  if (climateVar == "MDC") {
+    climDatAll <- lapply(climDatAll, `NAflag<-`, value = 0)
+  }
 
   climDatAllMerged <- Cache(
     transposeMergeWrite(climDatAll = climDatAll, climateType = climateType, climateYears = climateYears, 
