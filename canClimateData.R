@@ -34,12 +34,12 @@ defineModule(sim, list(
                     "SSP emissions scenario for `climateGCM`: one of 245, 370, or 585.",
                     "[If using 'climateGCM = CCSM4', climateSSP must be one of 45 or 85.]"),
     defineParameter("leadingArea", "character", NULL, NA, NA,
-                    "Short name of the main study area. Other areas will be cropped to complement ",
-                    "this when used (i.e., buffered province going to neighboring ones). Possible ",
-                    "values are: AB (Alberta), BC (British Columbia), MB (Manitoba), NT (for either",
-                    "Northwest Territories or Yukon), ON (Ontario), QC (Quebec), SK (Saskatchwen),",
-                    "YT (Yukon). Defaults to NULL, which means no province in particular will be ",
-                    "used. Raster merging is faster this way, though."),
+                    "Short name of the main study area(s). This/these will be added last in the stack, ",
+                    "in the (reversed) order they are passed, making sure their values are the ones ",
+                    "on the top of the raster. Possible values are: AB (Alberta), BC (British",
+                    "Columbia), MB (Manitoba), NT (for either Northwest Territories or Yukon), ON ",
+                    "(Ontario), QC (Quebec), SK (Saskatchwen), YT (Yukon). Defaults to NULL, which",
+                    "means the order followed will be the one supplied by the studyArea."),
     defineParameter("historicalFireYears", "numeric", default = 1991:2020, NA, NA,
                     desc = "range of years captured by the historical climate data"),
     defineParameter("projectedFireYears", "numeric", default = 2011:2100, NA, NA,
@@ -592,9 +592,11 @@ transposeMergeWrite <- function(climDatAll, climateType, climateYears, leadingAr
     }
   }
   message("Merging spatial layers using sf::gdal_utils('warp'...)")
-  if (!is.null(leadingArea)){
-    fns <- c(fns[!names(fns) %in% leadingArea],
-             fns[names(fns) %in% leadingArea])
+    if (all(names(fns) %in% leadingArea)){
+      fns <- rev(fns[leadingArea]) # Here we need to reverse, as the main area is the last one
+    } else {
+      fns <- c(fns[!names(fns) %in% leadingArea],
+               rev(fns[leadingArea]))
     }
     system.time(sf::gdal_utils(util = "warp", source = fns,
                                destination = filenameForSaving,
