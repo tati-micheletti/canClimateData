@@ -70,9 +70,6 @@ defineModule(sim, list(
     expectsInput("studyArea", "sf",
                  desc = "study area used for simulation",
                  sourceURL = NA),
-    expectsInput("studyAreaLarge", "sf",
-                 desc = "study area used for module parameterization (buffered to mitigate edge effects)",
-                 sourceURL = NA),
     expectsInput("studyAreaReporting", "sf",
                  desc = "study area used for reporting/post-processing", sourceURL = NA)
   ),
@@ -152,7 +149,7 @@ Init <- function(sim) {
     sf::st_as_sf() |>
     sf::st_transform(mod$targetCRS)
 
-  whereAmI <- postProcessTo(from = canProvs, to = sim$studyAreaLarge) |>
+  whereAmI <- postProcessTo(from = canProvs, to = sim$studyArea) |>
     Cache(omitArgs = "from") |> # canProvs will never vary
     (function(x) x$NAME_1)() |>
     gsub("Nunavut", "Northwest Territories", x = _) |> ## NT+NU together
@@ -191,9 +188,9 @@ Init <- function(sim) {
   dt <- data.table::fread(file = file.path(dataPath(sim), "climateDataURLs.csv"))
   dt <- dt[studyArea %in% mod$studyAreaNameShort]
 
-  digestSA_RTM <- CacheDigest(list(sim$studyAreaLarge, sim$rasterToMatch))$outputHash
+  digestSA_RTM <- CacheDigest(list(sim$studyArea, sim$rasterToMatch))$outputHash
 
-  sim$studyAreaLarge$studyAreaName <- paste0(P(sim)$studyAreaName, collapse = "_")  # makes it a data.frame
+  sim$studyArea$studyAreaName <- paste0(P(sim)$studyAreaName, collapse = "_")  # makes it a data.frame
 
   stopifnot(getOption("reproducible.useNewDigestAlgorithm") == 2)
 
@@ -319,7 +316,7 @@ Init <- function(sim) {
   commonArgs <- list(studyAreaNamesShort = mod$studyAreaNameShort,
                      studyAreaNamesLong = mod$studyAreaNameDir,
                      studyAreaName = P(sim)$studyAreaName,
-                     rasterToMatch = sim$rasterToMatchLarge, studyArea = sim$studyAreaLarge,
+                     rasterToMatch = sim$rasterToMatchLarge, studyArea = sim$studyArea,
                      currentModuleName = currentModule(sim),
                      digestSA_RTM = digestSA_RTM,
                      leadingArea = leadingArea)
@@ -404,14 +401,6 @@ Init <- function(sim) {
     sim$studyAreaReporting <- sim$studyArea
   }
 
-  # if (!suppliedElsewhere("studyArea", sim)) { # This is the second call to !suppliedElsewhere("studyArea", sim)
-  #   ## NOTE: studyArea and studyAreaLarge are the same [buffered] area
-  #   sim$studyArea <- sf::st_buffer(sim$studyArea, P(sim)$bufferDist)
-  # }
-
-  if (!suppliedElsewhere("studyAreaLarge", sim)) {
-    sim$studyAreaLarge <- sim$studyArea
-  }
 
   if (is.na(P(sim)$studyAreaName)) {
     ## use unique hash as study area name
@@ -432,7 +421,7 @@ Init <- function(sim) {
   if (!suppliedElsewhere("rasterToMatchLarge", sim)) {
     sim$rasterToMatchLarge <- Cache(LandR::prepInputsLCC,
                                     year = 2005,
-                                    studyArea = sim$studyAreaLarge,
+                                    studyArea = sim$studyArea,
                                     destinationPath = dPath,
                                     useCache = P(sim)$.useCache,
                                     filename2 = NULL)
