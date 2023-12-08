@@ -313,7 +313,8 @@ Init <- function(sim) {
   climateEraArgs <- purrr::transpose(listNamed(climateType, climateYears, climatePath, climateURLs, fun, climateVar))
 
   if (is.null(P(sim)$leadingArea))
-    leadingArea <- mod$studyAreaNameShort
+    leadingArea <- mod$studyAreaNameShort else 
+      leadingArea <- P(sim)$leadingArea
 
   commonArgs <- list(studyAreaNamesShort = mod$studyAreaNameShort,
                      studyAreaNamesLong = mod$studyAreaNameDir,
