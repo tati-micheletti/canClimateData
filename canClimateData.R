@@ -357,13 +357,14 @@ Init <- function(sim) {
   commonArgsSubset$studyAreaForMask <- sa
   commonArgsSubset$saveInner <- FALSE
   allArgs <- modifyList2(climateEraArgs[[eraHere]], commonArgsSubset, list(normals = normals)) # normals is used by the fun
-  projATA <- Cache(do.call(prepClimateData, allArgs, quote = TRUE),
+  sim$ATAstack <- Cache(do.call(prepClimateData, allArgs, quote = TRUE),
                       omitArgs = omitArgs, quick = quick,
                       .functionName = prepClimateFunctionName(eraHere))
 
-  eraHere <- climateType[[5]] # CMI -- very similar to climateType[[4]]
+  # CMI -- very similar to climateType[[4]]
+  eraHere <- climateType[[5]]
   allArgs <- modifyList2(climateEraArgs[[eraHere]], commonArgsSubset, list(normals = normals)) # normals is used by the fun
-  projCMI <- Cache(do.call(prepClimateData, allArgs, quote = TRUE),
+  sim$CMIstack <- Cache(do.call(prepClimateData, allArgs, quote = TRUE),
                    omitArgs = omitArgs, quick = quick,
                    .functionName = prepClimateFunctionName(eraHere))
 
