@@ -552,6 +552,8 @@ prepClimateData <- function(studyAreaNamesShort,
     omitArgs = c("climDatAll", "climateType", "climateYears", "rasterToMatch", "climatePath", "studyAreaName"),
     .cacheExtra = c(digestSA_RTM, dig1, studyAreaNamesLong, studyAreaNamesShort, climateURLs)
   )
+  if (grepl("[[:digit:]]{4,4}", names(climDatAllMerged[[1]])))
+    climDatAllMerged <- updateStackYearNames(climDatAllMerged, climateYears)
 
   climDatAllMerged
 
