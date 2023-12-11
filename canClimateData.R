@@ -544,14 +544,12 @@ prepClimateData <- function(studyAreaNamesShort,
     climDatAll <- lapply(climDatAll, `NAflag<-`, value = 0)
   }
 
-  climDatAllMerged <- Cache(
-    transposeMergeWrite(climDatAll = climDatAll, climateType = climateType, climateYears = climateYears,
-                        rasterToMatch = rasterToMatch, climatePath = climatePath,
-                        studyAreaName = studyAreaName, saveOuter = saveOuter, climateVar = climateVar,
-                        leadingArea = leadingArea),
-    omitArgs = c("climDatAll", "climateType", "climateYears", "rasterToMatch", "climatePath", "studyAreaName"),
-    .cacheExtra = c(digestSA_RTM, dig1, studyAreaNamesLong, studyAreaNamesShort, climateURLs)
-  )
+  climDatAllMerged <- transposeMergeWrite(climDatAll = climDatAll, climateType = climateType, climateYears = climateYears,
+                                          rasterToMatch = rasterToMatch, climatePath = climatePath,
+                                          studyAreaName = studyAreaName, saveOuter = saveOuter, climateVar = climateVar,
+                                          leadingArea = leadingArea) |>
+    Cache(omitArgs = c("climDatAll", "climateType", "climateYears", "rasterToMatch", "climatePath", "studyAreaName"),
+          .cacheExtra = c(digestSA_RTM, dig1, studyAreaNamesLong, studyAreaNamesShort, climateURLs))
   if (grepl("[[:digit:]]{4,4}", names(climDatAllMerged[[1]])))
     climDatAllMerged <- updateStackYearNames(climDatAllMerged, climateYears)
 
